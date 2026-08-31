@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+output/
+.env
+*.log
+workflow.config.json
+ai-maturity-slides-content.md
+slides-for-powerpoint.md
+test_error.txt
+test_output.txt

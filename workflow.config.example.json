@@ -1,0 +1,12 @@
+{
+  "projectRepos": {
+    "PROJ": ["your-org/your-repo"]
+  },
+  "projectBoards": {
+    "PROJ": 1
+  },
+  "comparisonExcludedAssignees": [
+    "Full Name One",
+    "Full Name Two"
+  ]
+}
