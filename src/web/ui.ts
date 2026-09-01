@@ -66,6 +66,8 @@ export function getUiHtml(): string {
     .action-card .icon { font-size: 2rem; margin-bottom: 0.5rem; }
     .action-card .title { font-weight: 600; }
     .action-card .desc { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
+    .action-card.disabled { cursor: not-allowed; opacity: 0.45; }
+    .action-card.disabled:hover { border-color: #334155; background: #1e293b; }
 
     .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
     .filter-row input {
@@ -193,15 +195,15 @@ export function getUiHtml(): string {
             <div class="title">View Report</div>
             <div class="desc">Charts & tables from cached data</div>
           </div>
-          <div class="action-card" onclick="selectAction('analyze')">
+          <div class="action-card" id="action-analyze" onclick="selectAction('analyze')">
             <div class="icon">&#129302;</div>
             <div class="title">AI Analysis</div>
-            <div class="desc">Claude insights & recommendations</div>
+            <div class="desc" id="action-analyze-desc">Claude insights & recommendations</div>
           </div>
-          <div class="action-card" onclick="selectAction('full')">
+          <div class="action-card" id="action-full" onclick="selectAction('full')">
             <div class="icon">&#9889;</div>
             <div class="title">Full Pipeline</div>
-            <div class="desc">Fetch + Report + Analysis</div>
+            <div class="desc" id="action-full-desc">Fetch + Report + Analysis</div>
           </div>
         </div>
         <div class="btn-row">
@@ -243,7 +245,7 @@ export function getUiHtml(): string {
   </div>
 
   <script>
-    let state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [] };
+    let state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [], appConfig: { githubEnabled: true, claudeEnabled: true } };
     const ticketTables = {};
 
     // Load teams on start
@@ -257,6 +259,16 @@ export function getUiHtml(): string {
         grid.appendChild(card);
       });
     });
+
+    // Load optional-integration availability and disable features that aren't configured
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+      state.appConfig = cfg;
+      if (!cfg.claudeEnabled) {
+        document.getElementById('action-analyze').classList.add('disabled');
+        document.getElementById('action-analyze-desc').textContent = 'Unavailable — set CLAUDE_CODE_OAUTH_TOKEN';
+        document.getElementById('action-full-desc').textContent = 'Fetch + Report only — set CLAUDE_CODE_OAUTH_TOKEN for AI analysis';
+      }
+    }).catch(() => {});
 
     function goStep(id) {
       document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -414,6 +426,7 @@ export function getUiHtml(): string {
     }
 
     function selectAction(action) {
+      if (action === 'analyze' && !state.appConfig.claudeEnabled) return;
       state.action = action;
       if (action === 'fetch') {
         execute();
@@ -475,7 +488,9 @@ export function getUiHtml(): string {
           showResults(allHtml);
         }
 
-        if (action === 'analyze' || action === 'full') {
+        if ((action === 'analyze' || action === 'full') && !state.appConfig.claudeEnabled) {
+          if (action === 'analyze') throw new Error('AI analysis is not configured. Set CLAUDE_CODE_OAUTH_TOKEN to enable it.');
+        } else if (action === 'analyze' || action === 'full') {
           showProgress('Running Claude AI analysis...');
           let analysisHtml = '';
           for (const sprint of state.sprints) {

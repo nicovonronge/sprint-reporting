@@ -1,7 +1,7 @@
 import { select, checkbox, confirm, input } from '@inquirer/prompts';
 import ora from 'ora';
 import chalk from 'chalk';
-import { getConfig } from './config.js';
+import { getConfig, hasGitHubToken, hasClaudeToken } from './config.js';
 import { JiraClient } from './clients/jira-client.js';
 import { PROJECT_BOARDS, PROJECT_REPOS } from './constants/workflow.js';
 import type { JiraSprint } from './types/jira.js';
@@ -75,15 +75,21 @@ export async function runInteractive(): Promise<void> {
   });
 
   // Step 3: Pick an action
+  const githubEnabled = hasGitHubToken(config);
+  const claudeEnabled = hasClaudeToken(config);
   const action = await select({
     message: 'What would you like to do?',
     choices: [
-      { name: 'Fetch data from Jira & GitHub', value: 'fetch' },
-      { name: 'Fetch data (skip GitHub)', value: 'fetch-no-gh' },
+      ...(githubEnabled ? [{ name: 'Fetch data from Jira & GitHub', value: 'fetch' }] : []),
+      { name: githubEnabled ? 'Fetch data (skip GitHub)' : 'Fetch data (GITHUB_TOKEN not set)', value: 'fetch-no-gh' },
       { name: 'Generate report (terminal)', value: 'report' },
       { name: 'Generate report (terminal + HTML)', value: 'report-html' },
-      { name: 'Claude AI analysis', value: 'analyze' },
-      { name: 'Fetch → Report → Analyze (full pipeline)', value: 'full' },
+      ...(claudeEnabled ? [
+        { name: 'Claude AI analysis', value: 'analyze' },
+        { name: 'Fetch → Report → Analyze (full pipeline)', value: 'full' },
+      ] : [
+        { name: 'Fetch → Report (CLAUDE_CODE_OAUTH_TOKEN not set — no analysis)', value: 'full' },
+      ]),
     ],
   });
 
@@ -131,7 +137,7 @@ export async function runInteractive(): Promise<void> {
     });
   }
 
-  if (action === 'analyze' || action === 'full') {
+  if ((action === 'analyze' || action === 'full') && claudeEnabled) {
     const { runAnalyze } = await import('./services/claude-analyzer.js');
     await runAnalyze({
       project: projectKey,

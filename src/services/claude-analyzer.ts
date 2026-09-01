@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { getConfig } from '../config.js';
+import { getConfig, hasClaudeToken } from '../config.js';
 import { load } from '../cache/cache-manager.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from './metrics-calculator.js';
 import { parseFilterOptions, applyFilters } from './ticket-filter.js';
@@ -27,13 +27,18 @@ function ensureClaudeCliAvailable(): void {
  * subscription instead of separate API billing.
  */
 export function runClaudeCli(prompt: string, model: string): Promise<string> {
-  ensureClaudeCliAvailable();
   const config = getConfig();
+  if (!hasClaudeToken(config)) {
+    return Promise.reject(new Error(
+      'AI analysis is not configured. Run `claude setup-token` to generate a CLAUDE_CODE_OAUTH_TOKEN, then set it in .env.'
+    ));
+  }
+  ensureClaudeCliAvailable();
 
   // --bare would skip CLAUDE_CODE_OAUTH_TOKEN entirely, so it's intentionally omitted.
   // A stray exported ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN outranks the OAuth token in
   // the CLI's credential precedence, so strip those to guarantee the OAuth token wins.
-  const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: config.CLAUDE_CODE_OAUTH_TOKEN };
+  const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: config.CLAUDE_CODE_OAUTH_TOKEN! };
   delete env.ANTHROPIC_API_KEY;
   delete env.ANTHROPIC_AUTH_TOKEN;
 
@@ -92,6 +97,13 @@ interface AnalyzeOptions {
 }
 
 export async function runAnalyze(options: AnalyzeOptions): Promise<void> {
+  if (!hasClaudeToken(getConfig())) {
+    log.error(
+      'AI analysis is not configured. Run `claude setup-token` to generate a CLAUDE_CODE_OAUTH_TOKEN, then set it in .env.'
+    );
+    process.exit(1);
+  }
+
   const projectKey = options.project.toUpperCase();
   const filters = parseFilterOptions(options);
   const model = options.model ?? 'claude-sonnet-5';

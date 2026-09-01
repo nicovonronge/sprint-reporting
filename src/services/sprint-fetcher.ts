@@ -1,5 +1,5 @@
 import ora from 'ora';
-import { getConfig } from '../config.js';
+import { getConfig, hasGitHubToken } from '../config.js';
 import { JiraClient } from '../clients/jira-client.js';
 import { GitHubClient } from '../clients/github-client.js';
 import { save, type CachedSprintData } from '../cache/cache-manager.js';
@@ -76,10 +76,12 @@ async function fetchSprint(
 
   let githubData: Record<string, GitHubPR[]> = {};
 
-  if (fetchGitHub) {
+  if (fetchGitHub && !hasGitHubToken(config)) {
+    log.warn('GITHUB_TOKEN not set — skipping GitHub PR fetch');
+  } else if (fetchGitHub) {
     const repos = PROJECT_REPOS[projectKey];
     if (repos && repos.length > 0) {
-      const ghClient = new GitHubClient(config.GITHUB_TOKEN);
+      const ghClient = new GitHubClient(config.GITHUB_TOKEN!);
       const ghSpinner = ora(`Fetching GitHub PRs (0/${issues.length})...`).start();
 
       for (let i = 0; i < issues.length; i++) {

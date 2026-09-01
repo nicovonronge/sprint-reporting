@@ -7,8 +7,8 @@ const configSchema = z.object({
   JIRA_BASE_URL: z.string().url(),
   JIRA_EMAIL: z.string().email(),
   JIRA_API_TOKEN: z.string().min(1, 'JIRA_API_TOKEN is required'),
-  GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
-  CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1, 'CLAUDE_CODE_OAUTH_TOKEN is required (run `claude setup-token`)'),
+  GITHUB_TOKEN: z.string().min(1).optional(),
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -33,4 +33,12 @@ export function getConfig(): Config {
 
 export function getPartialConfig(): Partial<Config> {
   return configSchema.partial().parse(process.env);
+}
+
+export function hasGitHubToken(config: Config): boolean {
+  return !!config.GITHUB_TOKEN;
+}
+
+export function hasClaudeToken(config: Config): boolean {
+  return !!config.CLAUDE_CODE_OAUTH_TOKEN;
 }
