@@ -4,6 +4,22 @@ These rules govern how ticket time is measured in this tool. They exist because 
 changelog doesn't match how the team's process actually works — apply them when touching metrics
 calculation, and don't "fix" the numbers back to raw wall-clock/status-transition math.
 
+## Sprint-scoped report data (`sprintReport`)
+
+- Each ticket's `sprintReport` object holds the data for the sprint period only. Cycle counts
+  (`devCycles`/`qaCycles`), swimlane times and `turnaroundMs` only cover activity between the
+  sprint start and end dates — rework or dwell time from earlier sprints is not re-reported.
+- Turnaround runs from the later of ticket creation and sprint start to the last Done transition
+  at or before sprint end (minus escalated time); null if it wasn't finished during the sprint.
+- Point-in-time fields (status, assignee, QA assignees, story/dev/QA points, root cause, work
+  category, priority, components, labels, versions) are the value **as of the sprint end date**,
+  rebuilt from the Jira changelog (`src/services/point-in-time.ts`). A value set in an earlier
+  sprint (e.g. story points in 3.2) still shows in a later one; later edits don't leak back.
+- Lifetime data (`lifetimeSwimlaneTimes`, `lifetimeTurnaroundMs`, `transitions`) stays at the
+  top level of the ticket and is untouched by sprint scoping. Tickets with no activity in the
+  window stay in the report.
+- Implemented in `buildSprintReport` in `src/services/metrics-calculator.ts`.
+
 ## Escalated lane
 
 - A ticket whose **current** status is `Escalated` is excluded from the report entirely (not
@@ -56,6 +72,35 @@ calculation, and don't "fix" the numbers back to raw wall-clock/status-transitio
   it there if team leads/roles change. Implemented via `excludeNonDevAssignees` in
   `src/services/ticket-filter.ts`, called from `buildComparisonReport` in
   `src/services/comparison-report.ts`.
+
+## People report
+
+- Web UI only: a multi-sprint performance/KPI report for one person in one role (Dev or QA) on
+  one project. The user picks the sprints (they align with KPI seasons); the tool checks which are
+  fetched and offers to fetch the rest. Never mixes projects.
+- Built from each sprint's `sprintReport` data, so cycles and lane time sum across sprints
+  without double counting. A ticket is credited to a person **per sprint**, by the dev assignee /
+  QA assignees **as of that sprint's end**. Tickets are rolled up once per key across sprints:
+  points/status/completion come from the latest sprint, cycles and lane time are summed.
+- Cycles are role-specific: Dev = `QA Failed` cycles, QA = `PO Review Failed` cycles. Lanes the
+  role controls (Dev: To Do/In Development; QA: Ready for QA/In QA) are primary; the rest are
+  shown greyed as context.
+- The comparison report's non-dev assignee exclusion does **not** apply here. The team baseline
+  is every ticket in the same sprints (QA: tickets that have a QA assignee).
+- Linked defects are lifetime counts for the ticket, not sprint-scoped.
+- Implemented in `src/services/people-report.ts`, served by `/api/people/options` and
+  `/api/people/report`; the page has print styles and a JSON export.
+
+## Data guide ("i" button)
+
+`src/constants/data-guide.ts` holds the plain-language explanation of these rules. It is shown by
+the "i" button in the web UI (`/api/data-guide/:kind`) and embedded as `dataGuide` in the People
+Report JSON export, so a person or AI reading an export knows what each figure means.
+The sprint report and comparison report have "Export JSON" buttons too (`src/services/export-builder.ts`,
+`/api/export/sprint-report`, `/api/export/comparison`): each file is `{ info, generation, data }` —
+`info` is the guide plus a field dictionary, `generation` records sprints, filters, fetch times and the
+steps followed. Exports list ticket keys (not full tickets) under `byDeveloper`/`byQaAssignee`. **When you
+change any rule above, update the guide too** (and the AI analysis note below).
 
 ## AI analysis
 

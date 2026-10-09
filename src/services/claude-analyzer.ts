@@ -142,13 +142,13 @@ export function buildAnalysisPrompt(m: SprintMetrics): string {
 
   return `You are analyzing sprint development metrics for a software team. Provide actionable insights, not generic advice.
 
-Note on the figures below: Escalated-lane tickets/time are already excluded (currently-escalated tickets don't appear at all, and time spent escalated is subtracted from turnaround/swimlane totals for tickets that moved on), Todo time for tickets that never left the backlog is measured from when their sprint actually started rather than ticket creation, and all durations exclude weekends. Don't flag the absence of an ESCALATED row or a short Todo time as an anomaly — that's expected.
+Note on the figures below: Escalated-lane tickets/time are already excluded (currently-escalated tickets don't appear at all, and time spent escalated is subtracted from turnaround/swimlane totals for tickets that moved on), Todo time for tickets that never left the backlog is measured from when their sprint actually started rather than ticket creation, and all durations exclude weekends. All figures are scoped to the sprint window: status, assignee, components and points are as of the sprint end date, and cycle counts, swimlane times and turnaround only cover activity between sprint start and end (a ticket that cycled heavily in an earlier sprint is not penalised here). Don't flag the absence of an ESCALATED row or a short Todo time as an anomaly — that's expected.
 
 ## Sprint: ${m.sprintName} (${m.projectKey})
 - Period: ${m.sprintStartDate ? new Date(m.sprintStartDate).toLocaleDateString() : '?'} to ${m.sprintEndDate ? new Date(m.sprintEndDate).toLocaleDateString() : '?'}
 - Total tickets: ${m.totalTickets} (${m.completedTickets} completed, ${m.carriedOverTickets} carried over)
 - Story points: ${m.totalStoryPoints} total (Dev: ${m.totalDevPoints}, QA: ${m.totalQaPoints})
-- Avg lifetime turnaround: ${m.avgLifetimeTurnaroundMs ? formatDuration(m.avgLifetimeTurnaroundMs) : 'N/A'}
+- Avg turnaround (within sprint): ${m.avgTurnaroundMs ? formatDuration(m.avgTurnaroundMs) : 'N/A'}
 - Avg dev rework cycles: ${m.avgDevCycles.toFixed(1)}
 - Avg QA rework cycles: ${m.avgQaCycles.toFixed(1)}
 - Total linked defects: ${m.totalDefects}
@@ -164,15 +164,15 @@ ${ticketSummaries}
 
 ## Developer Breakdown
 ${Object.entries(m.byDeveloper).map(([dev, tickets]) => {
-  const completed = tickets.filter(t => t.currentStatus === 'Done').length;
-  const sp = tickets.reduce((s, t) => s + (t.storyPoints ?? 0), 0);
-  return `- ${dev}: ${tickets.length} tickets (${completed} done), ${sp} SP, avg dev cycles: ${(tickets.reduce((s, t) => s + t.devCycles, 0) / tickets.length).toFixed(1)}`;
+  const completed = tickets.filter(t => t.sprintReport.status === 'Done').length;
+  const sp = tickets.reduce((s, t) => s + (t.sprintReport.storyPoints ?? 0), 0);
+  return `- ${dev}: ${tickets.length} tickets (${completed} done), ${sp} SP, avg dev cycles: ${(tickets.reduce((s, t) => s + t.sprintReport.devCycles, 0) / tickets.length).toFixed(1)}`;
 }).join('\n')}
 
 ## QA Breakdown
 ${Object.entries(m.byQaAssignee).map(([qa, tickets]) => {
-  const qaSp = tickets.reduce((s, t) => s + (t.qaPoints ?? 0), 0);
-  return `- ${qa}: ${tickets.length} tickets, ${qaSp} QA SP, avg QA cycles: ${(tickets.reduce((s, t) => s + t.qaCycles, 0) / tickets.length).toFixed(1)}`;
+  const qaSp = tickets.reduce((s, t) => s + (t.sprintReport.qaPoints ?? 0), 0);
+  return `- ${qa}: ${tickets.length} tickets, ${qaSp} QA SP, avg QA cycles: ${(tickets.reduce((s, t) => s + t.sprintReport.qaCycles, 0) / tickets.length).toFixed(1)}`;
 }).join('\n')}
 
 Please provide:
@@ -184,7 +184,7 @@ Please provide:
 }
 
 function summarizeTicket(t: TicketMetrics): string {
-  const sprintTimes = t.sprintSwimlaneTimes
+  const sprintTimes = t.sprintReport.swimlaneTimes
     .map(st => `${st.swimlane}: ${formatDuration(st.totalMs)}`)
     .join(', ');
 
@@ -192,5 +192,5 @@ function summarizeTicket(t: TicketMetrics): string {
     ? `PRs: ${t.github.prs.length}, PR time: ${t.github.totalPRTimeMs ? formatDuration(t.github.totalPRTimeMs) : 'N/A'}`
     : 'No PRs';
 
-  return `- ${t.key} [${t.issueType}] "${t.summary}" | Assignee: ${t.assignee ?? 'None'} | QA: ${t.qaAssignees.join(', ') || 'None'} | Status: ${t.currentStatus} | SP: ${t.storyPoints ?? '-'} (Dev: ${t.devPoints ?? '-'}, QA: ${t.qaPoints ?? '-'}) | Turnaround: ${t.lifetimeTurnaroundMs ? formatDuration(t.lifetimeTurnaroundMs) : 'N/A'} | Dev cycles: ${t.devCycles} | QA cycles: ${t.qaCycles} | Defects: ${t.linkedDefects} | Sprints: ${t.sprintCount} | Sprint times: [${sprintTimes}] | ${prInfo}`;
+  return `- ${t.key} [${t.issueType}] "${t.summary}" | Assignee: ${t.sprintReport.assignee ?? 'None'} | QA: ${t.sprintReport.qaAssignees.join(', ') || 'None'} | Status: ${t.sprintReport.status} | SP: ${t.sprintReport.storyPoints ?? '-'} (Dev: ${t.sprintReport.devPoints ?? '-'}, QA: ${t.sprintReport.qaPoints ?? '-'}) | Turnaround: ${t.sprintReport.turnaroundMs ? formatDuration(t.sprintReport.turnaroundMs) : 'N/A'} | Dev cycles: ${t.sprintReport.devCycles} | QA cycles: ${t.sprintReport.qaCycles} | Defects: ${t.linkedDefects} | Sprints: ${t.sprintCount} | Sprint times: [${sprintTimes}] | ${prInfo}`;
 }

@@ -1,6 +1,6 @@
 import type { CachedSprintData } from '../cache/cache-manager.js';
 import type { JiraIssue, JiraSprint } from '../types/jira.js';
-import type { TicketMetrics, SprintMetrics, SwimlaneTime } from '../types/metrics.js';
+import type { TicketMetrics, SprintMetrics, SprintReportData, StatusTransition, SwimlaneTime } from '../types/metrics.js';
 import type { TicketGitHubData } from '../types/github.js';
 import {
   parseTransitions,
@@ -11,6 +11,7 @@ import {
   rebaseSwimlaneTime,
 } from './changelog-parser.js';
 import { countDevCycles, countQaCycles } from './cycle-counter.js';
+import { statusAt, textAt, numberAt, labelsAt, namesAt, usersAt } from './point-in-time.js';
 import { detectLinkedDefects } from './defect-detector.js';
 import { CUSTOM_FIELDS, SWIMLANE_ORDER, STATUS_TO_SWIMLANE, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
 import { businessMsBetween } from '../utils/date-utils.js';
@@ -33,6 +34,7 @@ export function calculateTicketMetrics(
   // Escalated time is an interruption: subtract it from totals and hide the category for
   // tickets that passed through Escalated but have since moved on.
   const escalatedMs = extractSwimlaneMs(lifetimeSwimlaneTimes, EXCLUDED_SWIMLANE);
+  const sprintEscalatedMs = extractSwimlaneMs(sprintSwimlaneTimes, EXCLUDED_SWIMLANE);
   lifetimeSwimlaneTimes = stripSwimlane(lifetimeSwimlaneTimes, EXCLUDED_SWIMLANE);
   sprintSwimlaneTimes = stripSwimlane(sprintSwimlaneTimes, EXCLUDED_SWIMLANE);
 
@@ -58,8 +60,6 @@ export function calculateTicketMetrics(
     sprintSwimlaneTimes = rebaseSwimlaneTime(sprintSwimlaneTimes, 'TO DO', firstStartedDate);
   }
 
-  const devCycles = countDevCycles(transitions);
-  const qaCycles = countQaCycles(transitions);
   const defects = detectLinkedDefects(issue);
 
   // Lifetime turnaround: first entry into any status → last Done transition, minus any time
@@ -69,42 +69,102 @@ export function calculateTicketMetrics(
     ? Math.max(0, rawLifetimeTurnaroundMs - escalatedMs)
     : null;
 
-  // QA Assignees
-  const qaField = issue.fields[CUSTOM_FIELDS.QA_ASSIGNEE] as Array<{ displayName: string }> | null;
-  const qaAssignees = qaField?.map(u => u.displayName) ?? [];
-
-  // Root cause
-  const rootCause = (issue.fields[CUSTOM_FIELDS.ROOT_CAUSE] as { value: string } | null)?.value ?? null;
-
-  // Work category
-  const workCategory = (issue.fields[CUSTOM_FIELDS.WORK_CATEGORY] as { value: string } | null)?.value ?? null;
+  const sprintReport = buildSprintReport(
+    issue, transitions, sprintStartDate, sprintEndDate, sprintSwimlaneTimes, sprintEscalatedMs,
+  );
 
   return {
     key: issue.key,
     summary: issue.fields.summary,
     issueType: issue.fields.issuetype.name,
-    assignee: issue.fields.assignee?.displayName ?? null,
-    qaAssignees,
-    storyPoints: (issue.fields[CUSTOM_FIELDS.STORY_POINTS] as number | null) ?? null,
-    devPoints: (issue.fields[CUSTOM_FIELDS.DEV_POINTS] as number | null) ?? null,
-    qaPoints: (issue.fields[CUSTOM_FIELDS.QA_POINTS] as number | null) ?? null,
-    rootCause,
-    workCategory,
     currentStatus: issue.fields.status.name,
     createdDate: issue.fields.created,
+    updatedDate: issue.fields.updated ?? null,
+    statusChangedDate: issue.fields.statuscategorychangedate ?? null,
+    reporter: issue.fields.reporter?.displayName ?? null,
+    creator: issue.fields.creator?.displayName ?? null,
+    subtaskCount: issue.fields.subtasks?.length ?? 0,
+    watchers: issue.fields.watches?.watchCount ?? 0,
+    sprintReport,
     lifetimeTurnaroundMs,
     lifetimeSwimlaneTimes,
-    sprintSwimlaneTimes,
     sprintCount,
     sprintNames,
     carryOverCount,
-    devCycles,
-    qaCycles,
     linkedDefects: defects.count,
     linkedDefectKeys: defects.keys,
     github: githubPRs,
     transitions,
   };
+}
+
+/**
+ * Everything a sprint report shows for one ticket. Point-in-time fields (status, assignee,
+ * components, points, ...) are rebuilt from the changelog as of the sprint end, so a value set
+ * in an earlier sprint still shows. Cycles and durations only count activity inside the sprint.
+ */
+function buildSprintReport(
+  issue: JiraIssue,
+  transitions: StatusTransition[],
+  sprintStartDate: string,
+  sprintEndDate: string,
+  swimlaneTimes: SwimlaneTime[],
+  escalatedMs: number,
+): SprintReportData {
+  const hasWindow = !!(sprintStartDate && sprintEndDate);
+  // Active sprints may end in the future; nothing has changed after "now" anyway.
+  const asOf = sprintEndDate && new Date(sprintEndDate).getTime() < Date.now()
+    ? sprintEndDate
+    : new Date().toISOString();
+  const f = issue.fields;
+  const window = hasWindow ? { start: sprintStartDate, end: sprintEndDate } : undefined;
+
+  const turnaround = hasWindow ? computeWindowedTurnaround(issue, transitions, sprintStartDate, asOf) : null;
+
+  return {
+    asOf,
+    status: statusAt(issue, asOf),
+    assignee: textAt(issue, 'assignee', asOf, f.assignee?.displayName ?? null),
+    qaAssignees: usersAt(
+      issue, CUSTOM_FIELDS.QA_ASSIGNEE, asOf,
+      (f[CUSTOM_FIELDS.QA_ASSIGNEE] as Array<{ accountId?: string; displayName: string }> | null) ?? [],
+    ),
+    storyPoints: numberAt(issue, CUSTOM_FIELDS.STORY_POINTS, asOf, (f[CUSTOM_FIELDS.STORY_POINTS] as number | null) ?? null),
+    devPoints: numberAt(issue, CUSTOM_FIELDS.DEV_POINTS, asOf, (f[CUSTOM_FIELDS.DEV_POINTS] as number | null) ?? null),
+    qaPoints: numberAt(issue, CUSTOM_FIELDS.QA_POINTS, asOf, (f[CUSTOM_FIELDS.QA_POINTS] as number | null) ?? null),
+    rootCause: textAt(issue, CUSTOM_FIELDS.ROOT_CAUSE, asOf, (f[CUSTOM_FIELDS.ROOT_CAUSE] as { value: string } | null)?.value ?? null),
+    workCategory: textAt(issue, CUSTOM_FIELDS.WORK_CATEGORY, asOf, (f[CUSTOM_FIELDS.WORK_CATEGORY] as { value: string } | null)?.value ?? null),
+    priority: textAt(issue, 'priority', asOf, f.priority?.name ?? null),
+    components: namesAt(issue, 'components', asOf, f.components?.map(c => c.name) ?? []),
+    labels: labelsAt(issue, asOf, f.labels ?? []),
+    fixVersions: namesAt(issue, 'fixVersions', asOf, f.fixVersions?.map(v => v.name) ?? []),
+    affectsVersions: namesAt(issue, 'versions', asOf, f.versions?.map(v => v.name) ?? []),
+    turnaroundMs: turnaround !== null ? Math.max(0, turnaround - escalatedMs) : null,
+    swimlaneTimes,
+    devCycles: countDevCycles(transitions, window),
+    qaCycles: countQaCycles(transitions, window),
+  };
+}
+
+/**
+ * Turnaround within the sprint: from the later of ticket creation and sprint start, to the last
+ * Done transition at or before the sprint end. Null if it wasn't finished during the sprint.
+ */
+function computeWindowedTurnaround(
+  issue: JiraIssue,
+  transitions: StatusTransition[],
+  sprintStartDate: string,
+  asOf: string,
+): number | null {
+  const endMs = new Date(asOf).getTime();
+  const startMs = new Date(sprintStartDate).getTime();
+  const lastDone = transitions
+    .filter(t => STATUS_TO_SWIMLANE[t.toStatus] === 'DONE' && new Date(t.timestamp).getTime() <= endMs)
+    .at(-1);
+  if (!lastDone || new Date(lastDone.timestamp).getTime() < startMs) return null;
+
+  const from = new Date(issue.fields.created).getTime() > startMs ? issue.fields.created : sprintStartDate;
+  return businessMsBetween(from, lastDone.timestamp);
 }
 
 export function calculateSprintMetrics(data: CachedSprintData): SprintMetrics {
@@ -124,7 +184,7 @@ export function aggregateSprintMetrics(
   data: CachedSprintData,
 ): SprintMetrics {
   const completed = tickets.filter(t => {
-    const swimlane = STATUS_TO_SWIMLANE[t.currentStatus];
+    const swimlane = STATUS_TO_SWIMLANE[t.sprintReport.status];
     return swimlane === 'DONE';
   });
 
@@ -137,19 +197,19 @@ export function aggregateSprintMetrics(
   const avg = (arr: number[]): number =>
     arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
 
-  // Average lifetime turnaround (only for completed tickets)
+  // Average sprint-window turnaround (only for completed tickets)
   const turnaroundValues = completed
-    .map(t => t.lifetimeTurnaroundMs)
+    .map(t => t.sprintReport.turnaroundMs)
     .filter((v): v is number => v !== null);
 
   // Average swimlane times
-  const avgSprintSwimlane = averageSwimlaneTimes(tickets.map(t => t.sprintSwimlaneTimes));
+  const avgSprintSwimlane = averageSwimlaneTimes(tickets.map(t => t.sprintReport.swimlaneTimes));
   const avgLifetimeSwimlane = averageSwimlaneTimes(tickets.map(t => t.lifetimeSwimlaneTimes));
 
   // Group by developer
   const byDeveloper: Record<string, TicketMetrics[]> = {};
   for (const t of tickets) {
-    const dev = t.assignee ?? 'Unassigned';
+    const dev = t.sprintReport.assignee ?? 'Unassigned';
     if (!byDeveloper[dev]) byDeveloper[dev] = [];
     byDeveloper[dev].push(t);
   }
@@ -157,11 +217,11 @@ export function aggregateSprintMetrics(
   // Group by QA assignee
   const byQaAssignee: Record<string, TicketMetrics[]> = {};
   for (const t of tickets) {
-    for (const qa of t.qaAssignees) {
+    for (const qa of t.sprintReport.qaAssignees) {
       if (!byQaAssignee[qa]) byQaAssignee[qa] = [];
       byQaAssignee[qa].push(t);
     }
-    if (t.qaAssignees.length === 0) {
+    if (t.sprintReport.qaAssignees.length === 0) {
       if (!byQaAssignee['Unassigned']) byQaAssignee['Unassigned'] = [];
       byQaAssignee['Unassigned'].push(t);
     }
@@ -176,14 +236,14 @@ export function aggregateSprintMetrics(
     completedTickets: completed.length,
     newTickets,
     carriedOverTickets: carriedOver,
-    totalStoryPoints: sum(tickets.map(t => t.storyPoints)),
-    totalDevPoints: sum(tickets.map(t => t.devPoints)),
-    totalQaPoints: sum(tickets.map(t => t.qaPoints)),
-    avgLifetimeTurnaroundMs: turnaroundValues.length > 0 ? avg(turnaroundValues) : null,
+    totalStoryPoints: sum(tickets.map(t => t.sprintReport.storyPoints)),
+    totalDevPoints: sum(tickets.map(t => t.sprintReport.devPoints)),
+    totalQaPoints: sum(tickets.map(t => t.sprintReport.qaPoints)),
+    avgTurnaroundMs: turnaroundValues.length > 0 ? avg(turnaroundValues) : null,
     avgSprintSwimlaneTimesMs: avgSprintSwimlane,
     avgLifetimeSwimlaneTimesMs: avgLifetimeSwimlane,
-    avgDevCycles: avg(tickets.map(t => t.devCycles)),
-    avgQaCycles: avg(tickets.map(t => t.qaCycles)),
+    avgDevCycles: avg(tickets.map(t => t.sprintReport.devCycles)),
+    avgQaCycles: avg(tickets.map(t => t.sprintReport.qaCycles)),
     totalDefects: sum(tickets.map(t => t.linkedDefects)),
     ticketMetrics: tickets,
     byDeveloper,

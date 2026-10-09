@@ -9,6 +9,10 @@ import { GitHubClient } from '../clients/github-client.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from '../services/metrics-calculator.js';
 import { applyFilters } from '../services/ticket-filter.js';
 import { buildComparisonReport } from '../services/comparison-report.js';
+import { buildSprintReportExport, buildComparisonExport } from '../services/export-builder.js';
+import { buildPeopleReport, listPeopleOptions } from '../services/people-report.js';
+import { getDataGuide, isGuideKind } from '../constants/data-guide.js';
+import type { PersonRole } from '../types/people-report.js';
 import { SWIMLANE_ORDER, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
 import type { JiraSprint, JiraIssue } from '../types/jira.js';
 import type { GitHubPR } from '../types/github.js';
@@ -23,6 +27,16 @@ const TEAMS = [
   { key: 'TAN', name: 'Titans' },
   { key: 'GM', name: 'Green Mambas' },
 ];
+
+// Filters arrive from the UI as comma-separated strings.
+function toFilterOptions(filters: any): FilterOptions {
+  return {
+    developer: filters?.dev || undefined,
+    qa: filters?.qa || undefined,
+    tickets: filters?.tickets ? filters.tickets.split(',').map((k: string) => k.trim()) : undefined,
+    issueTypes: filters?.types ? filters.types.split(',').map((t: string) => t.trim()) : undefined,
+  };
+}
 
 export async function startWebUI(): Promise<void> {
   const config = getConfig();
@@ -132,12 +146,7 @@ export async function startWebUI(): Promise<void> {
 
     try {
       const fullMetrics = calculateSprintMetrics(cached);
-      const filterOpts: FilterOptions = {
-        developer: filters?.dev || undefined,
-        qa: filters?.qa || undefined,
-        tickets: filters?.tickets ? filters.tickets.split(',').map((k: string) => k.trim()) : undefined,
-        issueTypes: filters?.types ? filters.types.split(',').map((t: string) => t.trim()) : undefined,
-      };
+      const filterOpts = toFilterOptions(filters);
       const filtered = applyFilters(fullMetrics.ticketMetrics, filterOpts);
       const metrics = filtered.length !== fullMetrics.ticketMetrics.length
         ? aggregateSprintMetrics(filtered, cached)
@@ -185,6 +194,76 @@ export async function startWebUI(): Promise<void> {
     }
   });
 
+  // API: JSON export of the sprint report(s) as shown, with an info block explaining the data
+  app.post('/api/export/sprint-report', (req, res) => {
+    const { projectKey, sprintNames, filters } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0) {
+      res.status(400).json({ error: 'projectKey and a non-empty sprintNames array are required' });
+      return;
+    }
+
+    try {
+      res.json(buildSprintReportExport(projectKey, sprintNames, toFilterOptions(filters)));
+    } catch (err: any) {
+      res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: JSON export of the sprint comparison report
+  app.post('/api/export/comparison', (req, res) => {
+    const { projectKey, sprintNames } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0) {
+      res.status(400).json({ error: 'projectKey and a non-empty sprintNames array are required' });
+      return;
+    }
+
+    try {
+      res.json(buildComparisonExport(projectKey, sprintNames));
+    } catch (err: any) {
+      res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: Plain-language explanation of the data, shown by the UI's "i" button
+  app.get('/api/data-guide/:kind', (req, res) => {
+    const { kind } = req.params;
+    if (!isGuideKind(kind)) {
+      res.status(404).json({ error: 'Unknown guide: ' + kind });
+      return;
+    }
+    res.json(getDataGuide(kind));
+  });
+
+  // API: People report step 1 — who can be reported on, and which chosen sprints aren't fetched yet
+  app.post('/api/people/options', (req, res) => {
+    const { projectKey, sprintNames } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0) {
+      res.status(400).json({ error: 'projectKey and a non-empty sprintNames array are required' });
+      return;
+    }
+
+    try {
+      res.json(listPeopleOptions(projectKey, sprintNames));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: People report — one person, one role, combined across the chosen (fetched) sprints
+  app.post('/api/people/report', (req, res) => {
+    const { projectKey, sprintNames, person, role } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0 || !person || (role !== 'dev' && role !== 'qa')) {
+      res.status(400).json({ error: 'projectKey, sprintNames, person and role (dev|qa) are required' });
+      return;
+    }
+
+    try {
+      res.json(buildPeopleReport(projectKey, sprintNames, person, role as PersonRole));
+    } catch (err: any) {
+      res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
   // API: Claude analysis
   app.post('/api/analyze', async (req, res) => {
     if (!hasClaudeToken(config)) {
@@ -201,12 +280,7 @@ export async function startWebUI(): Promise<void> {
 
     try {
       const resolvedModel = model ?? 'claude-sonnet-5';
-      const filterOpts: FilterOptions = {
-        developer: filters?.dev || undefined,
-        qa: filters?.qa || undefined,
-        tickets: filters?.tickets ? filters.tickets.split(',').map((k: string) => k.trim()) : undefined,
-        issueTypes: filters?.types ? filters.types.split(',').map((t: string) => t.trim()) : undefined,
-      };
+      const filterOpts = toFilterOptions(filters);
       const analysisKey = JSON.stringify({ model: resolvedModel, filterOpts });
 
       const existing = !forceRefresh ? findAnalysis(cached, analysisKey) : undefined;

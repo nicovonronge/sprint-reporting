@@ -25,7 +25,7 @@ function renderSprintSummary(m: SprintMetrics): void {
     { 'New in Sprint': m.newTickets },
     { 'Carried Over': m.carriedOverTickets },
     { 'Story Points': `${m.totalStoryPoints} (Dev: ${m.totalDevPoints}, QA: ${m.totalQaPoints})` },
-    { 'Avg Turnaround (Lifetime)': m.avgLifetimeTurnaroundMs ? formatDuration(m.avgLifetimeTurnaroundMs) : 'N/A' },
+    { 'Avg Turnaround (Sprint)': m.avgTurnaroundMs ? formatDuration(m.avgTurnaroundMs) : 'N/A' },
     { 'Avg Dev Cycles': m.avgDevCycles.toFixed(1) },
     { 'Avg QA Cycles': m.avgQaCycles.toFixed(1) },
     { 'Total Defects': m.totalDefects },
@@ -57,20 +57,20 @@ function renderTicketTable(tickets: TicketMetrics[]): void {
   });
 
   for (const t of tickets) {
-    const totalSprintTime = t.sprintSwimlaneTimes.reduce((s, st) => s + st.totalMs, 0);
+    const totalSprintTime = t.sprintReport.swimlaneTimes.reduce((s, st) => s + st.totalMs, 0);
 
     table.push([
       t.key,
       t.issueType.substring(0, 6),
       t.summary.substring(0, 28),
-      (t.assignee ?? '-').substring(0, 12),
-      statusColor(t.currentStatus),
-      t.lifetimeTurnaroundMs ? formatDurationShort(t.lifetimeTurnaroundMs) : '-',
+      (t.sprintReport.assignee ?? '-').substring(0, 12),
+      statusColor(t.sprintReport.status),
+      t.sprintReport.turnaroundMs ? formatDurationShort(t.sprintReport.turnaroundMs) : '-',
       totalSprintTime > 0 ? formatDurationShort(totalSprintTime) : '-',
-      cycleColor(t.devCycles),
-      cycleColor(t.qaCycles),
+      cycleColor(t.sprintReport.devCycles),
+      cycleColor(t.sprintReport.qaCycles),
       t.linkedDefects > 0 ? chalk.red(t.linkedDefects.toString()) : chalk.dim('0'),
-      t.storyPoints?.toString() ?? '-',
+      t.sprintReport.storyPoints?.toString() ?? '-',
       t.sprintCount > 1 ? chalk.yellow(t.sprintCount.toString()) : chalk.dim('1'),
     ]);
   }
@@ -116,16 +116,16 @@ function renderDeveloperSummary(metrics: SprintMetrics): void {
   });
 
   for (const [dev, tickets] of Object.entries(metrics.byDeveloper)) {
-    const completed = tickets.filter(t => t.currentStatus === 'Done').length;
-    const sp = tickets.reduce((s, t) => s + (t.storyPoints ?? 0), 0);
-    const devSp = tickets.reduce((s, t) => s + (t.devPoints ?? 0), 0);
+    const completed = tickets.filter(t => t.sprintReport.status === 'Done').length;
+    const sp = tickets.reduce((s, t) => s + (t.sprintReport.storyPoints ?? 0), 0);
+    const devSp = tickets.reduce((s, t) => s + (t.sprintReport.devPoints ?? 0), 0);
     const turnarounds = tickets
-      .map(t => t.lifetimeTurnaroundMs)
+      .map(t => t.sprintReport.turnaroundMs)
       .filter((v): v is number => v !== null);
     const avgTurnaround = turnarounds.length > 0
       ? turnarounds.reduce((s, v) => s + v, 0) / turnarounds.length
       : null;
-    const avgDevCycles = tickets.reduce((s, t) => s + t.devCycles, 0) / tickets.length;
+    const avgDevCycles = tickets.reduce((s, t) => s + t.sprintReport.devCycles, 0) / tickets.length;
 
     table.push([
       dev,
@@ -155,8 +155,8 @@ function renderQaSummary(metrics: SprintMetrics): void {
   });
 
   for (const [qa, tickets] of Object.entries(metrics.byQaAssignee)) {
-    const qaSp = tickets.reduce((s, t) => s + (t.qaPoints ?? 0), 0);
-    const avgQaCycles = tickets.reduce((s, t) => s + t.qaCycles, 0) / tickets.length;
+    const qaSp = tickets.reduce((s, t) => s + (t.sprintReport.qaPoints ?? 0), 0);
+    const avgQaCycles = tickets.reduce((s, t) => s + t.sprintReport.qaCycles, 0) / tickets.length;
     const qaTimes = tickets
       .flatMap(t => t.lifetimeSwimlaneTimes)
       .filter(st => st.swimlane === 'IN QA')

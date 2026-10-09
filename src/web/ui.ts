@@ -46,7 +46,7 @@ export function getUiHtml(): string {
     .badge-closed { background: #1e293b; color: #64748b; }
     .badge-cached { background: #134e2f; color: #34d399; }
 
-    .sprint-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .sprint-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: calc(100vh - 22rem); min-height: 8rem; overflow-y: auto; padding-right: 0.25rem; }
     .sprint-item {
       background: #1e293b; border: 2px solid #334155; border-radius: 8px; padding: 0.8rem 1rem;
       cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 0.75rem;
@@ -93,6 +93,8 @@ export function getUiHtml(): string {
     .progress { display: none; text-align: center; padding: 3rem; }
     .progress.active { display: block; }
     .spinner { width: 40px; height: 40px; border: 4px solid #334155; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    .spinner.spinner-sm { width: 18px; height: 18px; border-width: 3px; margin: 0; flex-shrink: 0; }
+    .loading-hint { display: flex; align-items: center; gap: 0.6rem; color: #94a3b8; padding: 0.5rem 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .progress-text { color: #94a3b8; }
 
@@ -122,6 +124,22 @@ export function getUiHtml(): string {
     .filter-input:focus { outline: none; border-color: #3b82f6; }
     td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #1e293b; }
     tr:hover td { background: #263548; }
+    .table-scroll { overflow: auto; border-radius: 8px; }
+    .table-scroll.limited thead tr:first-child th { position: sticky; top: 0; z-index: 2; }
+    .table-scroll.limited thead tr.filter-row-inline th { position: sticky; top: var(--hdr1, 2rem); z-index: 2; }
+    .ticket-toolbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .ticket-toolbar .col-chooser { margin-bottom: 0; }
+    .ticket-toolbar select { background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+    .ticket-toolbar label, .ticket-count { font-size: 0.8rem; color: #94a3b8; }
+    .table-scroll table { width: max-content; min-width: 100%; overflow: visible; }
+    .table-scroll td { white-space: nowrap; }
+    .col-chooser { position: relative; display: inline-block; margin-bottom: 0.5rem; }
+    .col-chooser summary { cursor: pointer; background: #334155; color: #e2e8f0; border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.8rem; list-style: none; user-select: none; }
+    .col-chooser summary::-webkit-details-marker { display: none; }
+    .col-menu { position: absolute; z-index: 20; top: 2rem; left: 0; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 0.6rem; width: 260px; max-height: 340px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    .col-menu label { display: flex; gap: 0.5rem; align-items: center; padding: 0.15rem 0; font-size: 0.8rem; color: #e2e8f0; cursor: pointer; }
+    .col-menu .col-actions { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .col-menu .col-actions button { background: #334155; color: #e2e8f0; border: none; border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
     .text-green { color: #4ade80; }
     .text-yellow { color: #fbbf24; }
     .text-red { color: #f87171; }
@@ -137,12 +155,67 @@ export function getUiHtml(): string {
     .compare-entry a:hover { text-decoration: underline; }
     .hint { color: #64748b; font-size: 0.8rem; margin-top: 0.5rem; }
 
+    .people-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
+    .people-controls select {
+      background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 0.6rem 0.8rem;
+      color: #e2e8f0; font-size: 0.9rem; width: 100%;
+    }
+    .people-controls label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.3rem; }
+    .report-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin: 0.5rem 0; }
+    .people-note { color: #64748b; font-size: 0.8rem; margin: 0.5rem 0 1rem; line-height: 1.5; }
+    tr.lane-context td { color: #64748b; }
+    .delta-good { color: #4ade80; }
+    .delta-bad { color: #f87171; }
+    .print-only { display: none; }
+
+    .info-btn {
+      position: fixed; top: 1rem; right: 1rem; z-index: 50; width: 34px; height: 34px; border-radius: 50%;
+      background: #334155; color: #e2e8f0; border: 2px solid #475569; font-weight: 700; font-style: italic;
+      font-family: Georgia, serif; font-size: 1.1rem; cursor: pointer;
+    }
+    .info-btn:hover, .info-btn.open { background: #3b82f6; border-color: #3b82f6; }
+    .info-panel {
+      display: none; position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 40;
+      background: #0f172a; border-left: 1px solid #334155; padding: 4rem 1.5rem 2rem; overflow-y: auto;
+      box-shadow: -8px 0 24px rgba(0,0,0,0.5); line-height: 1.55;
+    }
+    .info-panel.open { display: block; }
+    .info-panel h2 { margin-top: 0; }
+    .info-panel h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; color: #e2e8f0; }
+    .info-panel p.intro { color: #94a3b8; font-size: 0.9rem; }
+    .info-panel ul { margin-left: 1.1rem; color: #cbd5e1; font-size: 0.88rem; }
+    .info-panel li { margin-bottom: 0.35rem; }
+    .info-panel .field-name { font-family: monospace; color: #93c5fd; }
+
+    @media print {
+      body { background: #fff; color: #111; }
+      .container { max-width: none; padding: 0; }
+      .header, .wizard, .progress, .back-link, .no-print, .col-chooser { display: none !important; }
+      .print-only { display: block; }
+      .info-btn { display: none; }
+      .info-panel { position: static; width: auto; box-shadow: none; border: 1px solid #ccc; background: #fff; padding: 1rem; margin-top: 1.5rem; break-before: page; }
+      .info-panel h3, .info-panel ul, .info-panel p.intro { color: #111; }
+      .info-panel .field-name { color: #111; }
+      h2, h3 { color: #111; border-color: #ccc; }
+      .stat-card, table, .analysis-box { background: #fff; border: 1px solid #ccc; color: #111; }
+      .stat-card .label, .people-note, .text-dim, tr.lane-context td { color: #555; }
+      th { background: #eee; color: #111; }
+      td { border-color: #ddd; }
+      tr:hover td { background: transparent; }
+      .table-scroll { overflow: visible; max-height: none !important; }
+      .delta-good { color: #15803d; }
+      .delta-bad { color: #b91c1c; }
+      .people-section { break-inside: avoid; }
+    }
+
     @media (max-width: 768px) {
       .chart-grid, .action-grid, .filter-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
+  <button class="info-btn" id="info-btn" title="What does this data mean?" onclick="toggleInfo()">i</button>
+  <div class="info-panel" id="info-panel"></div>
   <div class="container">
     <div class="header">
       <h1>Sprint Report Tool</h1>
@@ -157,6 +230,9 @@ export function getUiHtml(): string {
         <div class="option-grid" id="team-grid"></div>
         <div class="compare-entry">
           <a id="compare-entry-link" onclick="toggleCompareFlow()">&#128200; Sprint Comparison Report — compare trends across sprints you've already downloaded</a>
+        </div>
+        <div class="compare-entry" style="margin-top:0.75rem;padding-top:0.75rem">
+          <a id="people-entry-link" onclick="togglePeopleFlow()">&#128100; People Report — review how one person did across several sprints</a>
         </div>
       </div>
 
@@ -178,6 +254,36 @@ export function getUiHtml(): string {
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="backToTeamFromCompare()">Back</button>
           <button class="btn" id="btn-compare-generate" disabled onclick="generateComparison()">Generate Comparison</button>
+        </div>
+      </div>
+
+      <!-- People Report: choose the sprints (the KPI period) -->
+      <div class="step" id="step-people-sprints">
+        <div class="step-label">People Report — Select the Sprints to Review</div>
+        <div class="sprint-list" id="people-sprint-list"></div>
+        <div class="hint">Pick every sprint in the review period. Sprints that haven't been fetched yet can be fetched for you.</div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="backToTeamFromPeople()">Back</button>
+          <button class="btn" id="btn-people-next" disabled onclick="peopleSprintsNext()">Next</button>
+        </div>
+      </div>
+
+      <!-- People Report: choose the person and role -->
+      <div class="step" id="step-people-person">
+        <div class="step-label">People Report — Select Person and Role</div>
+        <div class="people-controls">
+          <div><label for="people-role">Role</label>
+            <select id="people-role" onchange="renderPeopleOptions()">
+              <option value="dev">Developer (assignee)</option>
+              <option value="qa">QA (QA assignee)</option>
+            </select></div>
+          <div><label for="people-person">Person</label>
+            <select id="people-person" onchange="document.getElementById('btn-people-generate').disabled = !this.value"></select></div>
+        </div>
+        <div class="hint" id="people-person-hint"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goStep('step-people-sprints')">Back</button>
+          <button class="btn" id="btn-people-generate" disabled onclick="generatePeopleReport()">Generate Report</button>
         </div>
       </div>
 
@@ -245,7 +351,8 @@ export function getUiHtml(): string {
   </div>
 
   <script>
-    let state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [], appConfig: { githubEnabled: true, claudeEnabled: true } };
+    let state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [], peopleSprints: [], peopleOptions: null, peopleReport: null, infoKind: 'general', exportRequest: null, appConfig: { githubEnabled: true, claudeEnabled: true } };
+    const guideCache = {};
     const ticketTables = {};
 
     // Load teams on start
@@ -270,6 +377,76 @@ export function getUiHtml(): string {
       }
     }).catch(() => {});
 
+    // "i" panel: plain-language explanation of the data for whichever page is showing.
+    // state.infoKind is 'general' in the wizard and is set to sprint/comparison/people on results.
+    function setInfoKind(kind) {
+      state.infoKind = kind;
+      if (document.getElementById('info-panel').classList.contains('open')) renderInfo();
+    }
+
+    function toggleInfo() {
+      const panel = document.getElementById('info-panel');
+      const open = !panel.classList.contains('open');
+      panel.classList.toggle('open', open);
+      document.getElementById('info-btn').classList.toggle('open', open);
+      if (open) renderInfo();
+    }
+
+    async function renderInfo() {
+      const panel = document.getElementById('info-panel');
+      const kind = state.infoKind || 'general';
+      panel.innerHTML = '<div class="loading-hint"><div class="spinner spinner-sm"></div>Loading...</div>';
+      try {
+        if (!guideCache[kind]) {
+          const res = await fetch('/api/data-guide/' + kind);
+          if (!res.ok) throw new Error('Could not load the guide');
+          guideCache[kind] = await res.json();
+        }
+        const g = guideCache[kind];
+        let html = '<h2>' + escapeHtml(g.title) + '</h2><p class="intro">' + escapeHtml(g.intro) + '</p>';
+        g.sections.forEach(sec => {
+          html += '<h3>' + escapeHtml(sec.title) + '</h3><ul>'
+            + sec.points.map(p => '<li>' + escapeHtml(p) + '</li>').join('') + '</ul>';
+        });
+        if (g.fields) {
+          html += '<h3>Exported fields</h3><ul>'
+            + Object.entries(g.fields).map(([k, v]) => '<li><span class="field-name">' + escapeHtml(k) + '</span> — ' + escapeHtml(v) + '</li>').join('')
+            + '</ul>';
+        }
+        panel.innerHTML = html;
+      } catch (err) {
+        panel.innerHTML = '<div style="color:#f87171">' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    // JSON export of the report on screen. state.exportRequest says which endpoint and what to send;
+    // the server builds the file (data plus an info block explaining it).
+    function exportBar() {
+      return '<div class="report-actions no-print"><button class="btn btn-secondary" onclick="downloadExport()">&#11015; Export JSON</button></div>';
+    }
+
+    async function downloadExport() {
+      const req = state.exportRequest;
+      if (!req) return;
+      try {
+        const res = await fetch(req.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (req.name + '_' + new Date().toISOString().slice(0, 10)).replace(/[^a-zA-Z0-9_.-]+/g, '_') + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (err) {
+        alert('Export failed: ' + err.message);
+      }
+    }
+
     function goStep(id) {
       document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
@@ -280,6 +457,9 @@ export function getUiHtml(): string {
       if (state.flow === 'compare') {
         goStep('step-compare-sprints');
         loadComparisonSprints(key);
+      } else if (state.flow === 'people') {
+        goStep('step-people-sprints');
+        loadPeopleSprints(key);
       } else {
         goStep('step-sprint');
         loadSprints(key);
@@ -292,16 +472,265 @@ export function getUiHtml(): string {
       updateCompareEntryUI();
     }
 
+    function togglePeopleFlow() {
+      state.flow = state.flow === 'people' ? 'wizard' : 'people';
+      state.peopleSprints = [];
+      updateCompareEntryUI();
+    }
+
     function updateCompareEntryUI() {
       const label = document.getElementById('step-team-label');
       const link = document.getElementById('compare-entry-link');
+      const peopleLink = document.getElementById('people-entry-link');
+      link.parentElement.style.display = state.flow === 'people' ? 'none' : '';
+      peopleLink.parentElement.style.display = state.flow === 'compare' ? 'none' : '';
       if (state.flow === 'compare') {
         label.textContent = 'Sprint Comparison Report — Select a Team';
         link.textContent = "✕ Cancel comparison mode (back to normal report)";
+      } else if (state.flow === 'people') {
+        label.textContent = 'People Report — Select a Team';
+        peopleLink.textContent = "✕ Cancel people report (back to normal report)";
       } else {
         label.textContent = 'Step 1 of 4 — Select Team';
         link.textContent = "📈 Sprint Comparison Report — compare trends across sprints you've already downloaded";
+        peopleLink.textContent = "👤 People Report — review how one person did across several sprints";
       }
+    }
+
+    function backToTeamFromPeople() {
+      state.flow = 'wizard';
+      state.peopleSprints = [];
+      updateCompareEntryUI();
+      goStep('step-team');
+    }
+
+    // People report step 1: pick the sprints. Shows Jira's sprint list with a Cached badge so
+    // it's clear what still needs fetching.
+    function loadPeopleSprints(projectKey) {
+      const list = document.getElementById('people-sprint-list');
+      state.peopleSprints = [];
+      document.getElementById('btn-people-next').disabled = true;
+      list.innerHTML = '<div class="loading-hint"><div class="spinner spinner-sm"></div>Loading sprints...</div>';
+
+      fetch('/api/sprints/' + projectKey).then(r => r.json()).then(sprints => {
+        if (!Array.isArray(sprints)) throw new Error(sprints.error || 'Could not load sprints');
+        list.innerHTML = '';
+        // Only sprints that have started can have anything to report on.
+        sprints.filter(s => s.state !== 'future').forEach(s => {
+          const item = document.createElement('div');
+          item.className = 'sprint-item';
+          const badgeClass = s.state === 'active' ? 'badge-active' : 'badge-closed';
+          const dates = s.startDate ? new Date(s.startDate).toLocaleDateString() + ' - ' + (s.endDate ? new Date(s.endDate).toLocaleDateString() : '?') : '';
+          const cachedBadge = s.cachedAt
+            ? '<span class="badge badge-cached" title="Fetched ' + new Date(s.cachedAt).toLocaleString() + '">&#10003; Cached</span>'
+            : '<span class="badge badge-future">Not fetched</span>';
+          item.innerHTML = '<input type="checkbox" />'
+            + '<div class="sprint-name">' + escapeHtml(s.name) + '</div>'
+            + '<span class="badge ' + badgeClass + '">' + s.state + '</span>'
+            + cachedBadge
+            + '<div class="sprint-dates">' + dates + '</div>';
+
+          item.onclick = (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            const cb = item.querySelector('input');
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+          };
+          item.querySelector('input').addEventListener('change', (e) => {
+            if (e.target.checked) {
+              item.classList.add('selected');
+              state.peopleSprints.push(s.name);
+            } else {
+              item.classList.remove('selected');
+              state.peopleSprints = state.peopleSprints.filter(n => n !== s.name);
+            }
+            document.getElementById('btn-people-next').disabled = state.peopleSprints.length === 0;
+          });
+          list.appendChild(item);
+        });
+      }).catch(err => {
+        list.innerHTML = '<div style="color:#f87171">Error: ' + escapeHtml(err.message) + '</div>';
+      });
+    }
+
+    async function fetchPeopleOptions() {
+      const res = await fetch('/api/people/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      return res.json();
+    }
+
+    // Checks what's been fetched; offers to fetch the rest before moving on.
+    async function peopleSprintsNext() {
+      const btn = document.getElementById('btn-people-next');
+      btn.disabled = true;
+      try {
+        let options = await fetchPeopleOptions();
+        if (options.missing.length > 0) {
+          const ok = confirm(options.missing.length + ' of the selected sprint(s) have not been fetched yet:\\n\\n'
+            + options.missing.join('\\n') + '\\n\\nFetch them now? This can take a few minutes.');
+          if (!ok) { btn.disabled = false; return; }
+          showProgress('Fetching ' + options.missing.length + ' sprint(s) from Jira...');
+          const res = await fetch('/api/fetch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectKey: state.team, sprintNames: options.missing }),
+          });
+          if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+          options = await fetchPeopleOptions();
+          hideProgress();
+          document.getElementById('wizard').style.display = '';
+        }
+        state.peopleOptions = options;
+        renderPeopleOptions();
+        goStep('step-people-person');
+      } catch (err) {
+        hideProgress();
+        document.getElementById('wizard').style.display = '';
+        alert('Error: ' + err.message);
+      }
+      btn.disabled = state.peopleSprints.length === 0;
+    }
+
+    function renderPeopleOptions() {
+      const role = document.getElementById('people-role').value;
+      const people = (state.peopleOptions && state.peopleOptions[role]) || [];
+      const select = document.getElementById('people-person');
+      select.innerHTML = '<option value="">Select a person...</option>'
+        + people.map(p => '<option value="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + ' (' + p.tickets + ' tickets)</option>').join('');
+      document.getElementById('btn-people-generate').disabled = true;
+      document.getElementById('people-person-hint').textContent = people.length === 0
+        ? 'Nobody is recorded in this role for the selected sprints.'
+        : 'Ticket counts are across the selected sprints.';
+    }
+
+    async function generatePeopleReport() {
+      const person = document.getElementById('people-person').value;
+      const role = document.getElementById('people-role').value;
+      showProgress('Building people report...');
+      try {
+        const res = await fetch('/api/people/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints, person, role }),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+        state.peopleReport = await res.json();
+        hideProgress();
+        setInfoKind('people');
+        showResults(renderPeopleReport(state.peopleReport));
+      } catch (err) {
+        hideProgress();
+        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="reset()" style="margin-top:1rem">Try Again</button></div>');
+      }
+    }
+
+    function downloadPeopleReport() {
+      const r = state.peopleReport;
+      if (!r) return;
+      const blob = new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = ('people-report_' + r.projectKey + '_' + r.person + '_' + r.role).replace(/[^a-zA-Z0-9_.-]+/g, '_') + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // Relative difference vs the team, coloured by whether lower is better.
+    function deltaVsTeam(person, team, lowerIsBetter) {
+      if (person == null || team == null || team === 0) return '<span class="text-dim">-</span>';
+      const pct = Math.round(((person - team) / team) * 100);
+      if (pct === 0) return '<span class="text-dim">in line</span>';
+      const good = lowerIsBetter ? pct < 0 : pct > 0;
+      return '<span class="' + (good ? 'delta-good' : 'delta-bad') + '">' + (pct > 0 ? '+' : '') + pct + '%</span>';
+    }
+
+    function renderPeopleReport(r) {
+      const roleLabel = r.role === 'dev' ? 'Developer' : 'QA';
+      const cycleLabel = r.role === 'dev' ? 'Dev cycles (QA Failed)' : 'QA cycles (PO Review Failed)';
+      const s = r.summary, t = r.team;
+      const fmt = ms => ms == null ? 'N/A' : formatMs(ms);
+      const pct = v => v == null ? 'N/A' : Math.round(v * 100) + '%';
+      const sprintNames = r.sprints.map(x => escapeHtml(x.sprintName));
+      const first = r.sprints[0], last = r.sprints[r.sprints.length - 1];
+      const range = first
+        ? new Date(first.sprintStartDate).toLocaleDateString() + ' – ' + new Date(last.sprintEndDate || last.sprintStartDate).toLocaleDateString()
+        : '';
+
+      let html = '<div class="report-actions no-print">'
+        + '<button class="btn btn-secondary" onclick="downloadPeopleReport()">&#11015; Export JSON</button>'
+        + '<button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button></div>';
+
+      html += '<h2 style="margin-top:0.5rem">' + escapeHtml(r.person) + ' — ' + roleLabel + ' performance review</h2>';
+      html += '<p style="color:#94a3b8;margin-bottom:0.5rem">' + escapeHtml(r.projectKey) + ' &middot; ' + r.sprints.length + ' sprint(s): '
+        + sprintNames.join(', ') + (range ? ' (' + range + ')' : '') + '</p>';
+      html += '<p class="print-only" style="margin-bottom:0.5rem">Generated ' + new Date(r.generatedAt).toLocaleString() + '</p>';
+      html += '<p class="people-note">Each ticket is credited to this person in a sprint when they are the ' + (r.role === 'dev' ? 'assignee' : 'QA assignee')
+        + ' at that sprint\\'s end. Cycles and time in lane only count activity inside each selected sprint; weekends are excluded. '
+        + 'Linked defects are lifetime counts for the ticket. Treat small ticket counts with caution.</p>';
+
+      html += '<div class="people-section"><h3>Headline numbers</h3><div class="summary-grid">';
+      html += statCard('Tickets', s.tickets + ' <span class="text-dim" style="font-size:0.8rem">(team ' + t.tickets + ')</span>');
+      html += statCard('Completed', s.completed + ' / ' + s.tickets);
+      html += statCard('Story points', s.storyPoints + ' <span class="text-dim" style="font-size:0.8rem">(' + s.completedStoryPoints + ' done)</span>');
+      html += statCard('Avg turnaround', fmt(s.avgTurnaroundMs));
+      html += statCard('Median turnaround', fmt(s.medianTurnaroundMs));
+      html += statCard(cycleLabel, s.totalCycles + ' <span class="text-dim" style="font-size:0.8rem">(' + s.avgCyclesPerTicket.toFixed(2) + ' / ticket)</span>');
+      html += statCard('No-rework tickets', pct(s.reworkFreeRate) + ' <span class="text-dim" style="font-size:0.8rem">(' + s.ticketsWithoutRework + ')</span>');
+      html += statCard('Linked defects', s.linkedDefects);
+      html += '</div></div>';
+
+      html += '<div class="people-section"><h3>Compared with the team</h3><table><thead><tr><th>Measure</th><th>' + escapeHtml(r.person) + '</th><th>Team</th><th>Difference</th></tr></thead><tbody>';
+      const cmp = (label, a, b, text, lowerIsBetter) => {
+        html += '<tr><td>' + label + '</td><td>' + text(a) + '</td><td>' + text(b) + '</td><td>' + deltaVsTeam(a, b, lowerIsBetter) + '</td></tr>';
+      };
+      cmp('Avg turnaround', s.avgTurnaroundMs, t.avgTurnaroundMs, fmt, true);
+      cmp('Median turnaround', s.medianTurnaroundMs, t.medianTurnaroundMs, fmt, true);
+      cmp('Cycles per ticket', s.avgCyclesPerTicket, t.avgCyclesPerTicket, v => v.toFixed(2), true);
+      cmp('No-rework tickets', s.reworkFreeRate, t.reworkFreeRate, pct, false);
+      html += '</tbody></table></div>';
+
+      html += '<div class="people-section"><h3>Time in lane</h3>'
+        + '<p class="people-note">Lanes this role controls are shown first; greyed lanes are context only (' + (r.role === 'dev' ? 'e.g. waiting for QA is not in a developer\\'s control' : 'e.g. development time is not in QA\\'s control') + ').</p>'
+        + '<table><thead><tr><th>Lane</th><th>Tickets</th><th>Avg</th><th>Median</th><th>Team avg</th><th>Difference</th></tr></thead><tbody>';
+      const lanes = s.lanes.slice().sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0));
+      lanes.forEach(l => {
+        const tl = t.lanes.find(x => x.swimlane === l.swimlane);
+        html += '<tr class="' + (l.primary ? '' : 'lane-context') + '"><td>' + l.swimlane + '</td><td>' + l.tickets + '</td><td>' + formatMs(l.avgMs)
+          + '</td><td>' + formatMs(l.medianMs) + '</td><td>' + (tl ? formatMs(tl.avgMs) : '-') + '</td><td>'
+          + (l.primary ? deltaVsTeam(l.avgMs, tl && tl.avgMs, true) : '') + '</td></tr>';
+      });
+      if (lanes.length === 0) html += '<tr><td colspan="6" class="text-dim">No lane time recorded in these sprints.</td></tr>';
+      html += '</tbody></table></div>';
+
+      html += '<div class="people-section"><h3>By sprint</h3><table><thead><tr><th>Sprint</th><th>Tickets</th><th>Completed</th><th>SP</th><th>Avg turnaround</th><th>Cycles</th><th>No-rework</th></tr></thead><tbody>';
+      r.bySprint.forEach(b => {
+        const x = b.summary;
+        html += '<tr><td>' + escapeHtml(b.sprintName) + '</td><td>' + x.tickets + '</td><td>' + x.completed + '</td><td>' + x.storyPoints
+          + '</td><td>' + fmt(x.avgTurnaroundMs) + '</td><td>' + x.totalCycles + '</td><td>' + pct(x.reworkFreeRate) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+
+      html += '<div class="people-section"><h3>By issue type</h3><table><thead><tr><th>Type</th><th>Tickets</th><th>SP</th><th>Avg turnaround</th><th>Avg cycles</th></tr></thead><tbody>';
+      r.byIssueType.forEach(b => {
+        html += '<tr><td>' + escapeHtml(b.issueType) + '</td><td>' + b.tickets + '</td><td>' + b.storyPoints + '</td><td>' + fmt(b.avgTurnaroundMs)
+          + '</td><td>' + b.avgCycles.toFixed(2) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+
+      html += '<h3>Tickets (' + r.tickets.length + ')</h3><div class="table-scroll"><table><thead><tr><th>Key</th><th>Summary</th><th>Type</th><th>Sprints</th><th>Status</th><th>SP</th><th>Turnaround</th><th>Cycles</th><th>Defects</th></tr></thead><tbody>';
+      r.tickets.forEach(tk => {
+        const cycles = r.role === 'dev' ? tk.devCycles : tk.qaCycles;
+        html += '<tr><td>' + escapeHtml(tk.key) + '</td><td style="white-space:normal;min-width:16rem">' + escapeHtml(tk.summary) + '</td><td>' + escapeHtml(tk.issueType)
+          + '</td><td>' + tk.sprints.length + '</td><td>' + escapeHtml(tk.status) + '</td><td>' + (tk.storyPoints == null ? '-' : tk.storyPoints)
+          + '</td><td>' + (tk.turnaroundMs == null ? '-' : formatMs(tk.turnaroundMs)) + '</td><td>' + cycles + '</td><td>' + tk.linkedDefects + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+
+      return html;
     }
 
     function backToTeamFromCompare() {
@@ -313,7 +742,7 @@ export function getUiHtml(): string {
 
     function loadComparisonSprints(projectKey) {
       const list = document.getElementById('compare-sprint-list');
-      list.innerHTML = '<div style="color:#64748b">Loading cached sprints...</div>';
+      list.innerHTML = '<div class="loading-hint"><div class="spinner spinner-sm"></div>Loading available sprints...</div>';
       state.compareSprints = [];
       document.getElementById('btn-compare-generate').disabled = true;
 
@@ -371,7 +800,13 @@ export function getUiHtml(): string {
         if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
         const data = await res.json();
         hideProgress();
-        showResults(renderComparisonReport(data));
+        setInfoKind('comparison');
+        state.exportRequest = {
+          url: '/api/export/comparison',
+          body: { projectKey: state.team, sprintNames: state.compareSprints },
+          name: 'sprint-comparison_' + state.team,
+        };
+        showResults(exportBar() + renderComparisonReport(data));
       } catch (err) {
         hideProgress();
         showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="reset()" style="margin-top:1rem">Try Again</button></div>');
@@ -380,7 +815,10 @@ export function getUiHtml(): string {
 
     function loadSprints(projectKey) {
       const list = document.getElementById('sprint-list');
-      list.innerHTML = '<div style="color:#64748b">Loading sprints...</div>';
+      const nextBtn = document.getElementById('btn-sprint-next');
+      state.sprints = [];
+      nextBtn.disabled = true;
+      list.innerHTML = '<div class="loading-hint"><div class="spinner spinner-sm"></div>Loading available sprints...</div>';
 
       fetch('/api/sprints/' + projectKey).then(r => r.json()).then(sprints => {
         list.innerHTML = '';
@@ -485,7 +923,13 @@ export function getUiHtml(): string {
             allHtml += renderMetrics(metrics);
           }
           hideProgress();
-          showResults(allHtml);
+          setInfoKind('sprint');
+          state.exportRequest = {
+            url: '/api/export/sprint-report',
+            body: { projectKey: state.team, sprintNames: state.sprints.slice(), filters },
+            name: 'sprint-report_' + state.team,
+          };
+          showResults(exportBar() + allHtml);
         }
 
         if ((action === 'analyze' || action === 'full') && !state.appConfig.claudeEnabled) {
@@ -529,8 +973,10 @@ export function getUiHtml(): string {
     }
 
     function reset() {
-      state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [] };
+      state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [], peopleSprints: [], peopleOptions: null, peopleReport: null, infoKind: 'general', exportRequest: null, appConfig: state.appConfig };
       updateCompareEntryUI();
+      document.getElementById('info-panel').classList.remove('open');
+      document.getElementById('info-btn').classList.remove('open');
       document.getElementById('results').className = '';
       document.getElementById('results-content').innerHTML = '';
       document.getElementById('wizard').style.display = '';
@@ -554,7 +1000,7 @@ export function getUiHtml(): string {
       html += statCard('Completed', m.completedTickets + '/' + m.totalTickets);
       html += statCard('Carried Over', m.carriedOverTickets);
       html += statCard('Story Points', m.totalStoryPoints + ' (D:' + m.totalDevPoints + ' Q:' + m.totalQaPoints + ')');
-      html += statCard('Avg Turnaround', m.avgLifetimeTurnaroundMs ? formatMs(m.avgLifetimeTurnaroundMs) : 'N/A');
+      html += statCard('Avg Turnaround', m.avgTurnaroundMs ? formatMs(m.avgTurnaroundMs) : 'N/A');
       html += statCard('Avg Dev Cycles', m.avgDevCycles.toFixed(1));
       html += statCard('Avg QA Cycles', m.avgQaCycles.toFixed(1));
       html += statCard('Defects', m.totalDefects);
@@ -571,26 +1017,34 @@ export function getUiHtml(): string {
       // Ticket table
       const ticketTableId = 'ticket-table-' + Math.random().toString(36).slice(2);
       const ticketColumns = getTicketColumns(swimlaneLabels);
-      ticketTables[ticketTableId] = { tickets: m.ticketMetrics, columns: ticketColumns, sortKey: null, sortDir: 1, filters: {} };
+      ticketTables[ticketTableId] = { tickets: m.ticketMetrics, columns: ticketColumns, sortKey: null, sortDir: 1, filters: {}, hidden: loadHiddenColumns(ticketColumns), visibleRows: 25 };
 
-      html += '<h3>Ticket Details</h3><table id="' + ticketTableId + '"><thead>';
+      html += '<h3>Ticket Details</h3>';
+      html += '<div class="ticket-toolbar">' + columnChooserHtml(ticketTableId, ticketColumns)
+        + '<label>Visible rows: <select onchange="setTicketVisibleRows(\\'' + ticketTableId + '\\', this.value)">'
+        + [10, 25, 50, 100].map(n => '<option value="' + n + '"' + (n === 25 ? ' selected' : '') + '>' + n + '</option>').join('')
+        + '<option value="all">All</option></select></label>'
+        + '<span class="ticket-count" id="' + ticketTableId + '-count"></span></div>';
+      html += '<style id="' + ticketTableId + '-colstyle"></style>';
+      html += '<div class="table-scroll limited" id="' + ticketTableId + '-scroll"><table id="' + ticketTableId + '"><thead>';
       html += '<tr>' + ticketColumns.map(c =>
-        '<th class="th-sort" onclick="sortTicketTable(\\'' + ticketTableId + '\\',\\'' + c.key + '\\')">'
+        '<th data-col="' + c.key + '" class="th-sort" onclick="sortTicketTable(\\'' + ticketTableId + '\\',\\'' + c.key + '\\')">'
         + escapeHtml(c.label)
         + '<span class="sort-arrow" id="' + ticketTableId + '-arrow-' + c.key + '"></span></th>'
       ).join('') + '</tr>';
       html += '<tr class="filter-row-inline">' + ticketColumns.map(c =>
-        '<th><input class="filter-input" placeholder="' + (c.type === 'number' ? '>5 <10 =3' : 'filter...') + '" '
+        '<th data-col="' + c.key + '"><input class="filter-input" placeholder="' + (c.type === 'number' ? '>5 <10 =3' : 'filter...') + '" '
         + 'oninput="filterTicketTable(\\'' + ticketTableId + '\\',\\'' + c.key + '\\', this.value)" /></th>'
       ).join('') + '</tr>';
-      html += '</thead><tbody id="' + ticketTableId + '-body"></tbody></table>';
+      html += '</thead><tbody id="' + ticketTableId + '-body"></tbody></table></div>';
+      setTimeout(() => applyColumnVisibility(ticketTableId), 0);
 
       // Dev summary
       html += '<h3>Developer Summary</h3><table><thead><tr><th>Developer</th><th>Tickets</th><th>Completed</th><th>SP</th><th>Dev Cycles</th></tr></thead><tbody>';
       Object.entries(m.byDeveloper).forEach(([dev, tickets]) => {
-        const completed = tickets.filter(t => t.currentStatus === 'Done').length;
-        const sp = tickets.reduce((s, t) => s + (t.storyPoints || 0), 0);
-        const avgCycles = (tickets.reduce((s, t) => s + t.devCycles, 0) / tickets.length).toFixed(1);
+        const completed = tickets.filter(t => t.sprintReport.status === 'Done').length;
+        const sp = tickets.reduce((s, t) => s + (t.sprintReport.storyPoints || 0), 0);
+        const avgCycles = (tickets.reduce((s, t) => s + t.sprintReport.devCycles, 0) / tickets.length).toFixed(1);
         html += '<tr><td>' + dev + '</td><td>' + tickets.length + '</td><td>' + completed + '</td><td>' + sp + '</td><td>' + avgCycles + '</td></tr>';
       });
       html += '</tbody></table>';
@@ -613,8 +1067,8 @@ export function getUiHtml(): string {
           data: {
             labels: m.ticketMetrics.map(t => t.key),
             datasets: [
-              { label: 'Dev Cycles', data: m.ticketMetrics.map(t => t.devCycles), backgroundColor: '#f59e0b' },
-              { label: 'QA Cycles', data: m.ticketMetrics.map(t => t.qaCycles), backgroundColor: '#ef4444' }
+              { label: 'Dev Cycles', data: m.ticketMetrics.map(t => t.sprintReport.devCycles), backgroundColor: '#f59e0b' },
+              { label: 'QA Cycles', data: m.ticketMetrics.map(t => t.sprintReport.qaCycles), backgroundColor: '#ef4444' }
             ]
           },
           options: { responsive: true, plugins: { title: { display: true, text: 'Rework Cycles', color: '#94a3b8' } }, scales: { x: { ticks: { color: '#94a3b8', maxRotation: 90 } }, y: { ticks: { color: '#94a3b8', stepSize: 1 }, beginAtZero: true } } }
@@ -714,7 +1168,7 @@ export function getUiHtml(): string {
         labels,
         datasets: buckets.map((b, i) => ({
           label: b,
-          data: entries.map(e => e.metrics.ticketMetrics.filter(t => bucketOf(t.storyPoints) === b).length),
+          data: entries.map(e => e.metrics.ticketMetrics.filter(t => bucketOf(t.sprintReport.storyPoints) === b).length),
           backgroundColor: colors[i % colors.length],
         })),
       }, 'Ticket Size Distribution', {
@@ -745,7 +1199,7 @@ export function getUiHtml(): string {
         labels,
         datasets: [{
           label: 'Avg Turnaround (hours)',
-          data: entries.map(e => e.metrics.avgLifetimeTurnaroundMs != null ? +(e.metrics.avgLifetimeTurnaroundMs / 3600000).toFixed(2) : null),
+          data: entries.map(e => e.metrics.avgTurnaroundMs != null ? +(e.metrics.avgTurnaroundMs / 3600000).toFixed(2) : null),
           borderColor: colors[3], backgroundColor: colors[3], tension: 0.25,
         }],
       }, 'Avg Lifetime Turnaround (business hours)', commonScales);
@@ -789,27 +1243,43 @@ export function getUiHtml(): string {
         { key: 'key', label: 'Key', type: 'text', get: t => t.key },
         { key: 'type', label: 'Type', type: 'text', get: t => t.issueType },
         { key: 'summary', label: 'Summary', type: 'text', get: t => t.summary, fmt: v => v.substring(0, 50) },
-        { key: 'assignee', label: 'Assignee', type: 'text', get: t => t.assignee || '', fmt: v => v || '-' },
-        { key: 'qa', label: 'QA', type: 'text', get: t => (t.qaAssignees || []).join(', '), fmt: v => v || '-' },
+        { key: 'assignee', label: 'Assignee', type: 'text', get: t => t.sprintReport.assignee || '', fmt: v => v || '-' },
+        { key: 'qa', label: 'QA', type: 'text', get: t => (t.sprintReport.qaAssignees || []).join(', '), fmt: v => v || '-' },
         {
-          key: 'status', label: 'Status', type: 'text', get: t => t.currentStatus,
+          key: 'status', label: 'Status', type: 'text', get: t => t.sprintReport.status,
           cellClass: v => v === 'Done' ? 'text-green' : (v === 'QA Failed' || v === 'PO Review Failed') ? 'text-red' : 'text-yellow',
         },
         {
           key: 'turnaround', label: 'Turnaround', type: 'number',
-          get: t => t.lifetimeTurnaroundMs ? t.lifetimeTurnaroundMs / 3600000 : null,
+          get: t => t.sprintReport.turnaroundMs ? t.sprintReport.turnaroundMs / 3600000 : null,
           fmt: v => v == null ? '-' : formatMs(v * 3600000),
         },
         {
-          key: 'devCycles', label: 'Dev Cy', type: 'number', get: t => t.devCycles,
+          key: 'devCycles', label: 'Dev Cy', type: 'number', get: t => t.sprintReport.devCycles,
           cellClass: v => v === 0 ? 'text-dim' : v > 1 ? 'text-red' : 'text-yellow',
         },
         {
-          key: 'qaCycles', label: 'QA Cy', type: 'number', get: t => t.qaCycles,
+          key: 'qaCycles', label: 'QA Cy', type: 'number', get: t => t.sprintReport.qaCycles,
           cellClass: v => v === 0 ? 'text-dim' : v > 1 ? 'text-red' : 'text-yellow',
         },
         { key: 'defects', label: 'Defects', type: 'number', get: t => t.linkedDefects },
-        { key: 'sp', label: 'SP', type: 'number', get: t => t.storyPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'sp', label: 'SP', type: 'number', get: t => t.sprintReport.storyPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'devSp', hidden: true, label: 'Dev SP', type: 'number', get: t => t.sprintReport.devPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'qaSp', hidden: true, label: 'QA SP', type: 'number', get: t => t.sprintReport.qaPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'priority', label: 'Priority', type: 'text', get: t => t.sprintReport.priority || '', fmt: v => v || '-' },
+        { key: 'components', label: 'Components', type: 'text', get: t => (t.sprintReport.components || []).join(', '), fmt: v => v || '-' },
+        { key: 'labels', hidden: true, label: 'Labels', type: 'text', get: t => (t.sprintReport.labels || []).join(', '), fmt: v => v || '-' },
+        { key: 'fixVersions', hidden: true, label: 'Fix Versions', type: 'text', get: t => (t.sprintReport.fixVersions || []).join(', '), fmt: v => v || '-' },
+        { key: 'affectsVersions', hidden: true, label: 'Affects Versions', type: 'text', get: t => (t.sprintReport.affectsVersions || []).join(', '), fmt: v => v || '-' },
+        { key: 'rootCause', label: 'Root Cause', type: 'text', get: t => t.sprintReport.rootCause || '', fmt: v => v || '-' },
+        { key: 'workCategory', hidden: true, label: 'Work Category', type: 'text', get: t => t.sprintReport.workCategory || '', fmt: v => v || '-' },
+        { key: 'reporter', label: 'Reporter', type: 'text', get: t => t.reporter || '', fmt: v => v || '-' },
+        { key: 'creator', hidden: true, label: 'Creator', type: 'text', get: t => t.creator || '', fmt: v => v || '-' },
+        { key: 'created', hidden: true, label: 'Created', type: 'text', get: t => (t.createdDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'updated', hidden: true, label: 'Updated', type: 'text', get: t => (t.updatedDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'statusChanged', hidden: true, label: 'Status Changed', type: 'text', get: t => (t.statusChangedDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'subtasks', hidden: true, label: 'Subtasks', type: 'number', get: t => t.subtaskCount ?? 0 },
+        { key: 'watchers', hidden: true, label: 'Watchers', type: 'number', get: t => t.watchers ?? 0 },
         {
           key: 'sprints', label: 'Sprints', type: 'number', get: t => t.sprintCount, raw: true,
           fmt: v => v > 1 ? '<strong class="text-yellow">' + v + '</strong>' : '1',
@@ -820,7 +1290,7 @@ export function getUiHtml(): string {
         columns.push({
           key: 'sw_' + s, label: s, type: 'number',
           get: t => {
-            const st = t.sprintSwimlaneTimes.find(entry => entry.swimlane === s);
+            const st = t.sprintReport.swimlaneTimes.find(entry => entry.swimlane === s);
             return st && st.totalMs ? st.totalMs / 3600000 : null;
           },
           fmt: v => v == null ? '-' : formatMs(v * 3600000),
@@ -864,7 +1334,7 @@ export function getUiHtml(): string {
 
       let rows = tickets.filter(t => columns.every(c => {
         const f = filters[c.key];
-        if (!f) return true;
+        if (!f || state.hidden.has(c.key)) return true;
         const raw = c.get(t);
         const display = c.fmt ? c.fmt(raw) : (raw ?? '-');
         return matchesTicketFilter(raw, display, f, c.type === 'number');
@@ -883,7 +1353,7 @@ export function getUiHtml(): string {
           const display = c.fmt ? c.fmt(raw) : (raw ?? '-');
           const cellHtml = c.raw ? display : escapeHtml(String(display));
           const cls = c.cellClass ? c.cellClass(raw) : '';
-          return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + cellHtml + '</td>';
+          return '<td data-col="' + c.key + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + cellHtml + '</td>';
         }).join('') + '</tr>';
       }).join('');
 
@@ -891,6 +1361,87 @@ export function getUiHtml(): string {
         const arrow = document.getElementById(tableId + '-arrow-' + c.key);
         if (arrow) arrow.textContent = sortKey === c.key ? (sortDir === 1 ? ' ▲' : ' ▼') : '';
       });
+
+      const count = document.getElementById(tableId + '-count');
+      if (count) count.textContent = rows.length + (rows.length === tickets.length ? '' : ' of ' + tickets.length) + ' tickets';
+      applyTicketTableHeight(tableId);
+    }
+
+    // Caps the scroll area at roughly N body rows; the sticky header stays visible while scrolling.
+    function applyTicketTableHeight(tableId) {
+      const state = ticketTables[tableId];
+      const scroll = document.getElementById(tableId + '-scroll');
+      if (!state || !scroll) return;
+      const headRows = scroll.querySelectorAll('thead tr');
+      const firstRow = scroll.querySelector('tbody tr');
+      if (headRows.length) scroll.style.setProperty('--hdr1', headRows[0].offsetHeight + 'px');
+      if (state.visibleRows === 'all' || !firstRow) {
+        scroll.style.maxHeight = '';
+        return;
+      }
+      const headH = [...headRows].reduce((sum, r) => sum + r.offsetHeight, 0);
+      scroll.style.maxHeight = (headH + firstRow.offsetHeight * state.visibleRows + 2) + 'px';
+    }
+
+    function setTicketVisibleRows(tableId, value) {
+      const state = ticketTables[tableId];
+      if (!state) return;
+      state.visibleRows = value === 'all' ? 'all' : parseInt(value, 10);
+      applyTicketTableHeight(tableId);
+    }
+
+    const HIDDEN_COLS_STORAGE_KEY = 'ticketTableHiddenColumns';
+
+    function loadHiddenColumns(columns) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(HIDDEN_COLS_STORAGE_KEY));
+        if (Array.isArray(saved)) return new Set(saved);
+      } catch (e) { /* storage unavailable: use defaults */ }
+      return new Set(columns.filter(c => c.hidden).map(c => c.key));
+    }
+
+    function saveHiddenColumns(hidden) {
+      try { localStorage.setItem(HIDDEN_COLS_STORAGE_KEY, JSON.stringify([...hidden])); } catch (e) { /* ignore */ }
+    }
+
+    function applyColumnVisibility(tableId) {
+      const state = ticketTables[tableId];
+      const style = document.getElementById(tableId + '-colstyle');
+      if (!state || !style) return;
+      style.textContent = [...state.hidden]
+        .map(k => '#' + tableId + ' [data-col="' + k + '"] { display: none; }').join('\\n');
+      document.querySelectorAll('#' + tableId + '-cols input[type=checkbox]').forEach(cb => {
+        cb.checked = !state.hidden.has(cb.dataset.col);
+      });
+    }
+
+    function toggleTicketColumn(tableId, key, visible) {
+      const state = ticketTables[tableId];
+      if (!state) return;
+      if (visible) state.hidden.delete(key); else state.hidden.add(key);
+      saveHiddenColumns(state.hidden);
+      applyColumnVisibility(tableId);
+      renderTicketRows(tableId);
+    }
+
+    function setAllTicketColumns(tableId, mode) {
+      const state = ticketTables[tableId];
+      if (!state) return;
+      state.hidden = mode === 'all' ? new Set()
+        : new Set(state.columns.filter(c => c.hidden).map(c => c.key));
+      saveHiddenColumns(state.hidden);
+      applyColumnVisibility(tableId);
+      renderTicketRows(tableId);
+    }
+
+    function columnChooserHtml(tableId, columns) {
+      return '<details class="col-chooser" id="' + tableId + '-cols"><summary>Columns ▾</summary><div class="col-menu">'
+        + '<div class="col-actions">'
+        + '<button onclick="setAllTicketColumns(\\'' + tableId + '\\',\\'all\\')">Show all</button>'
+        + '<button onclick="setAllTicketColumns(\\'' + tableId + '\\',\\'default\\')">Reset</button></div>'
+        + columns.map(c => '<label><input type="checkbox" checked data-col="' + c.key + '" '
+          + 'onchange="toggleTicketColumn(\\'' + tableId + '\\',\\'' + c.key + '\\', this.checked)"> ' + escapeHtml(c.label) + '</label>').join('')
+        + '</div></details>';
     }
 
     function sortTicketTable(tableId, key) {

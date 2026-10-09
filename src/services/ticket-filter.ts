@@ -25,14 +25,14 @@ export function applyFilters(tickets: TicketMetrics[], filters: FilterOptions): 
   if (filters.developer) {
     const term = filters.developer.toLowerCase();
     result = result.filter(t =>
-      t.assignee?.toLowerCase().includes(term),
+      t.sprintReport.assignee?.toLowerCase().includes(term),
     );
   }
 
   if (filters.qa) {
     const term = filters.qa.toLowerCase();
     result = result.filter(t =>
-      t.qaAssignees.some(qa => qa.toLowerCase().includes(term)),
+      t.sprintReport.qaAssignees.some(qa => qa.toLowerCase().includes(term)),
     );
   }
 
@@ -56,6 +56,6 @@ export function applyFilters(tickets: TicketMetrics[], filters: FilterOptions): 
  */
 export function excludeNonDevAssignees(tickets: TicketMetrics[]): TicketMetrics[] {
   return tickets.filter(t =>
-    t.assignee != null && !COMPARISON_EXCLUDED_ASSIGNEES_LOWER.has(t.assignee.toLowerCase()),
+    t.sprintReport.assignee != null && !COMPARISON_EXCLUDED_ASSIGNEES_LOWER.has(t.sprintReport.assignee.toLowerCase()),
   );
 }

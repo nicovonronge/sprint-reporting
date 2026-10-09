@@ -81,6 +81,8 @@ export const EXCLUDED_SWIMLANE = 'ESCALATED';
 export const JIRA_FIELDS_TO_FETCH = [
   'summary', 'status', 'assignee', 'issuetype', 'issuelinks',
   'created', 'updated', 'resolution', 'resolutiondate', 'priority',
+  'components', 'labels', 'fixVersions', 'versions', 'reporter', 'creator',
+  'subtasks', 'watches', 'statuscategorychangedate',
   CUSTOM_FIELDS.SPRINT,
   CUSTOM_FIELDS.STORY_POINTS,
   CUSTOM_FIELDS.QA_ASSIGNEE,

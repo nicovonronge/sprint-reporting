@@ -36,54 +36,30 @@ function generateHtml(m: SprintMetrics): string {
     return `<tr><td>${s}</td><td>${formatDuration(sprintMs)}</td><td>${formatDuration(lifetimeMs)}</td></tr>`;
   }).join('');
 
-  const ticketColumnDefs: { key: string; label: string; type: 'text' | 'number' }[] = [
-    { key: 'key', label: 'Key', type: 'text' },
-    { key: 'type', label: 'Type', type: 'text' },
-    { key: 'summary', label: 'Summary', type: 'text' },
-    { key: 'assignee', label: 'Assignee', type: 'text' },
-    { key: 'qa', label: 'QA', type: 'text' },
-    { key: 'status', label: 'Status', type: 'text' },
-    { key: 'turnaround', label: 'Turnaround', type: 'number' },
-    { key: 'devCycles', label: 'Dev Cy', type: 'number' },
-    { key: 'qaCycles', label: 'QA Cy', type: 'number' },
-    { key: 'defects', label: 'Defects', type: 'number' },
-    { key: 'sp', label: 'SP', type: 'number' },
-    { key: 'sprints', label: 'Sprints', type: 'number' },
-    ...swimlaneLabels.map(s => ({ key: `sw_${s}`, label: s, type: 'number' as const })),
-  ];
-
-  const ticketHeaderRow = ticketColumnDefs.map(c =>
-    `<th class="th-sort" onclick="sortTicketTable('${c.key}')">${c.label}<span class="sort-arrow" id="arrow-${c.key}"></span></th>`,
-  ).join('');
-
-  const ticketFilterRow = ticketColumnDefs.map(c =>
-    `<th><input class="filter-input" placeholder="${c.type === 'number' ? '>5 <10 =3' : 'filter...'}" oninput="filterTicketTable('${c.key}', this.value)" /></th>`,
-  ).join('');
-
   // Per-ticket swimlane data for stacked bar chart
   const ticketLabels = m.ticketMetrics.map(t => t.key);
   const datasets = swimlaneLabels.map((swimlane, i) => {
     const data = m.ticketMetrics.map(t => {
-      const st = t.sprintSwimlaneTimes.find(s => s.swimlane === swimlane);
+      const st = t.sprintReport.swimlaneTimes.find(s => s.swimlane === swimlane);
       return st ? +(st.totalMs / 3_600_000).toFixed(2) : 0;
     });
     return `{ label: '${swimlane}', data: [${data.join(',')}], backgroundColor: '${swimlaneColors[i % swimlaneColors.length]}' }`;
   });
 
   // Cycle data
-  const devCycleData = m.ticketMetrics.map(t => t.devCycles);
-  const qaCycleData = m.ticketMetrics.map(t => t.qaCycles);
+  const devCycleData = m.ticketMetrics.map(t => t.sprintReport.devCycles);
+  const qaCycleData = m.ticketMetrics.map(t => t.sprintReport.qaCycles);
 
   // SP vs turnaround scatter
   const scatterData = m.ticketMetrics
-    .filter(t => t.storyPoints && t.lifetimeTurnaroundMs)
-    .map(t => `{ x: ${t.storyPoints}, y: ${(t.lifetimeTurnaroundMs! / 86_400_000).toFixed(2)} }`);
+    .filter(t => t.sprintReport.storyPoints && t.sprintReport.turnaroundMs)
+    .map(t => `{ x: ${t.sprintReport.storyPoints}, y: ${(t.sprintReport.turnaroundMs! / 86_400_000).toFixed(2)} }`);
 
   // Developer throughput
   const devLabels = Object.keys(m.byDeveloper);
   const devTicketCounts = devLabels.map(d => m.byDeveloper[d].length);
   const devSPCounts = devLabels.map(d =>
-    m.byDeveloper[d].reduce((s, t) => s + (t.storyPoints ?? 0), 0),
+    m.byDeveloper[d].reduce((s, t) => s + (t.sprintReport.storyPoints ?? 0), 0),
   );
 
   return `<!DOCTYPE html>
@@ -116,6 +92,16 @@ function generateHtml(m: SprintMetrics): string {
     }
     .filter-input::placeholder { color: #94a3b8; }
     .filter-input:focus { outline: none; border-color: #2563eb; }
+    .table-scroll { overflow-x: auto; border-radius: 8px; }
+    .table-scroll table { width: max-content; min-width: 100%; }
+    .table-scroll td { white-space: nowrap; }
+    .col-chooser { position: relative; display: inline-block; margin-bottom: 0.5rem; }
+    .col-chooser summary { cursor: pointer; background: #1e293b; color: #fff; border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.8rem; list-style: none; user-select: none; }
+    .col-chooser summary::-webkit-details-marker { display: none; }
+    .col-menu { position: absolute; z-index: 20; top: 2rem; left: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.6rem; width: 260px; max-height: 340px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+    .col-menu label { display: flex; gap: 0.5rem; align-items: center; padding: 0.15rem 0; font-size: 0.8rem; cursor: pointer; }
+    .col-menu .col-actions { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .col-menu .col-actions button { background: #e2e8f0; border: none; border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
     td { padding: 0.5rem 0.8rem; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; }
     tr:hover td { background: #f1f5f9; }
     .status-done { color: #16a34a; font-weight: 600; }
@@ -136,7 +122,7 @@ function generateHtml(m: SprintMetrics): string {
     <div class="card"><div class="label">Completed</div><div class="value">${m.completedTickets}/${m.totalTickets}</div></div>
     <div class="card"><div class="label">Carried Over</div><div class="value">${m.carriedOverTickets}</div></div>
     <div class="card"><div class="label">Story Points</div><div class="value">${m.totalStoryPoints}</div></div>
-    <div class="card"><div class="label">Avg Turnaround</div><div class="value">${m.avgLifetimeTurnaroundMs ? formatDuration(m.avgLifetimeTurnaroundMs) : 'N/A'}</div></div>
+    <div class="card"><div class="label">Avg Turnaround</div><div class="value">${m.avgTurnaroundMs ? formatDuration(m.avgTurnaroundMs) : 'N/A'}</div></div>
     <div class="card"><div class="label">Avg Dev Cycles</div><div class="value">${m.avgDevCycles.toFixed(1)}</div></div>
     <div class="card"><div class="label">Avg QA Cycles</div><div class="value">${m.avgQaCycles.toFixed(1)}</div></div>
     <div class="card"><div class="label">Total Defects</div><div class="value">${m.totalDefects}</div></div>
@@ -156,13 +142,14 @@ function generateHtml(m: SprintMetrics): string {
   </table>
 
   <h2>Ticket Details</h2>
-  <table id="ticket-table">
-    <thead>
-      <tr>${ticketHeaderRow}</tr>
-      <tr class="filter-row-inline">${ticketFilterRow}</tr>
-    </thead>
-    <tbody id="ticket-table-body"></tbody>
-  </table>
+  <div id="ticket-columns"></div>
+  <style id="ticket-table-colstyle"></style>
+  <div class="table-scroll">
+    <table id="ticket-table">
+      <thead id="ticket-table-head"></thead>
+      <tbody id="ticket-table-body"></tbody>
+    </table>
+  </div>
 
   <script>
     const ticketLabels = ${JSON.stringify(ticketLabels)};
@@ -220,34 +207,50 @@ function generateHtml(m: SprintMetrics): string {
 
     const ticketData = ${ticketDataJson};
     const ticketSwimlaneLabels = ${swimlaneLabelsJson};
-    const ticketState = { columns: getTicketColumns(ticketSwimlaneLabels), sortKey: null, sortDir: 1, filters: {} };
+    const ticketState = { columns: getTicketColumns(ticketSwimlaneLabels), sortKey: null, sortDir: 1, filters: {}, hidden: new Set() };
 
     function getTicketColumns(swimlaneLabels) {
       const columns = [
         { key: 'key', label: 'Key', type: 'text', get: t => t.key },
         { key: 'type', label: 'Type', type: 'text', get: t => t.issueType },
         { key: 'summary', label: 'Summary', type: 'text', get: t => t.summary },
-        { key: 'assignee', label: 'Assignee', type: 'text', get: t => t.assignee || '', fmt: v => v || '-' },
-        { key: 'qa', label: 'QA', type: 'text', get: t => (t.qaAssignees || []).join(', '), fmt: v => v || '-' },
+        { key: 'assignee', label: 'Assignee', type: 'text', get: t => t.sprintReport.assignee || '', fmt: v => v || '-' },
+        { key: 'qa', label: 'QA', type: 'text', get: t => (t.sprintReport.qaAssignees || []).join(', '), fmt: v => v || '-' },
         {
-          key: 'status', label: 'Status', type: 'text', get: t => t.currentStatus,
+          key: 'status', label: 'Status', type: 'text', get: t => t.sprintReport.status,
           cellClass: v => v === 'Done' ? 'status-done' : (v === 'QA Failed' || v === 'PO Review Failed') ? 'status-failed' : 'status-active',
         },
         {
           key: 'turnaround', label: 'Turnaround', type: 'number',
-          get: t => t.lifetimeTurnaroundMs ? t.lifetimeTurnaroundMs / 3600000 : null,
+          get: t => t.sprintReport.turnaroundMs ? t.sprintReport.turnaroundMs / 3600000 : null,
           fmt: v => v == null ? '-' : formatDurationClient(v * 3600000),
         },
         {
-          key: 'devCycles', label: 'Dev Cy', type: 'number', get: t => t.devCycles,
+          key: 'devCycles', label: 'Dev Cy', type: 'number', get: t => t.sprintReport.devCycles,
           cellClass: v => v === 0 ? '' : v === 1 ? 'cycle-warn' : 'cycle-bad',
         },
         {
-          key: 'qaCycles', label: 'QA Cy', type: 'number', get: t => t.qaCycles,
+          key: 'qaCycles', label: 'QA Cy', type: 'number', get: t => t.sprintReport.qaCycles,
           cellClass: v => v === 0 ? '' : v === 1 ? 'cycle-warn' : 'cycle-bad',
         },
         { key: 'defects', label: 'Defects', type: 'number', get: t => t.linkedDefects },
-        { key: 'sp', label: 'SP', type: 'number', get: t => t.storyPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'sp', label: 'SP', type: 'number', get: t => t.sprintReport.storyPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'devSp', hidden: true, label: 'Dev SP', type: 'number', get: t => t.sprintReport.devPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'qaSp', hidden: true, label: 'QA SP', type: 'number', get: t => t.sprintReport.qaPoints ?? null, fmt: v => v == null ? '-' : v },
+        { key: 'priority', label: 'Priority', type: 'text', get: t => t.sprintReport.priority || '', fmt: v => v || '-' },
+        { key: 'components', label: 'Components', type: 'text', get: t => (t.sprintReport.components || []).join(', '), fmt: v => v || '-' },
+        { key: 'labels', hidden: true, label: 'Labels', type: 'text', get: t => (t.sprintReport.labels || []).join(', '), fmt: v => v || '-' },
+        { key: 'fixVersions', hidden: true, label: 'Fix Versions', type: 'text', get: t => (t.sprintReport.fixVersions || []).join(', '), fmt: v => v || '-' },
+        { key: 'affectsVersions', hidden: true, label: 'Affects Versions', type: 'text', get: t => (t.sprintReport.affectsVersions || []).join(', '), fmt: v => v || '-' },
+        { key: 'rootCause', label: 'Root Cause', type: 'text', get: t => t.sprintReport.rootCause || '', fmt: v => v || '-' },
+        { key: 'workCategory', hidden: true, label: 'Work Category', type: 'text', get: t => t.sprintReport.workCategory || '', fmt: v => v || '-' },
+        { key: 'reporter', label: 'Reporter', type: 'text', get: t => t.reporter || '', fmt: v => v || '-' },
+        { key: 'creator', hidden: true, label: 'Creator', type: 'text', get: t => t.creator || '', fmt: v => v || '-' },
+        { key: 'created', hidden: true, label: 'Created', type: 'text', get: t => (t.createdDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'updated', hidden: true, label: 'Updated', type: 'text', get: t => (t.updatedDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'statusChanged', hidden: true, label: 'Status Changed', type: 'text', get: t => (t.statusChangedDate || '').substring(0, 10), fmt: v => v || '-' },
+        { key: 'subtasks', hidden: true, label: 'Subtasks', type: 'number', get: t => t.subtaskCount ?? 0 },
+        { key: 'watchers', hidden: true, label: 'Watchers', type: 'number', get: t => t.watchers ?? 0 },
         {
           key: 'sprints', label: 'Sprints', type: 'number', get: t => t.sprintCount, raw: true,
           fmt: v => v > 1 ? '<strong>' + v + '</strong>' : '1',
@@ -258,7 +261,7 @@ function generateHtml(m: SprintMetrics): string {
         columns.push({
           key: 'sw_' + s, label: s, type: 'number',
           get: t => {
-            const st = (t.sprintSwimlaneTimes || []).find(entry => entry.swimlane === s);
+            const st = (t.sprintReport.swimlaneTimes || []).find(entry => entry.swimlane === s);
             return st && st.totalMs ? st.totalMs / 3600000 : null;
           },
           fmt: v => v == null ? '-' : formatDurationClient(v * 3600000),
@@ -319,7 +322,7 @@ function generateHtml(m: SprintMetrics): string {
 
       let rows = ticketData.filter(t => columns.every(c => {
         const f = filters[c.key];
-        if (!f) return true;
+        if (!f || ticketState.hidden.has(c.key)) return true;
         const raw = c.get(t);
         const display = c.fmt ? c.fmt(raw) : (raw ?? '-');
         return matchesTicketFilter(raw, display, f, c.type === 'number');
@@ -338,7 +341,7 @@ function generateHtml(m: SprintMetrics): string {
           const display = c.fmt ? c.fmt(raw) : (raw ?? '-');
           const cellHtml = c.raw ? display : escapeHtml(String(display));
           const cls = c.cellClass ? c.cellClass(raw) : '';
-          return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + cellHtml + '</td>';
+          return '<td data-col="' + c.key + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + cellHtml + '</td>';
         }).join('') + '</tr>';
       }).join('');
 
@@ -346,6 +349,61 @@ function generateHtml(m: SprintMetrics): string {
         const arrow = document.getElementById('arrow-' + c.key);
         if (arrow) arrow.textContent = sortKey === c.key ? (sortDir === 1 ? ' ▲' : ' ▼') : '';
       });
+    }
+
+    const HIDDEN_COLS_STORAGE_KEY = 'ticketTableHiddenColumns';
+
+    function defaultHiddenColumns() {
+      return new Set(ticketState.columns.filter(c => c.hidden).map(c => c.key));
+    }
+
+    function loadHiddenColumns() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(HIDDEN_COLS_STORAGE_KEY));
+        if (Array.isArray(saved)) return new Set(saved);
+      } catch (e) { /* storage unavailable: use defaults */ }
+      return defaultHiddenColumns();
+    }
+
+    function applyColumnVisibility() {
+      document.getElementById('ticket-table-colstyle').textContent = [...ticketState.hidden]
+        .map(k => '#ticket-table [data-col="' + k + '"] { display: none; }').join('\\n');
+      document.querySelectorAll('#ticket-columns input[type=checkbox]').forEach(cb => {
+        cb.checked = !ticketState.hidden.has(cb.dataset.col);
+      });
+    }
+
+    function setHiddenColumns(hidden) {
+      ticketState.hidden = hidden;
+      try { localStorage.setItem(HIDDEN_COLS_STORAGE_KEY, JSON.stringify([...hidden])); } catch (e) { /* ignore */ }
+      applyColumnVisibility();
+      renderTicketRows();
+    }
+
+    function toggleTicketColumn(key, visible) {
+      const hidden = new Set(ticketState.hidden);
+      if (visible) hidden.delete(key); else hidden.add(key);
+      setHiddenColumns(hidden);
+    }
+
+    function renderTicketChrome() {
+      const cols = ticketState.columns;
+      document.getElementById('ticket-table-head').innerHTML =
+        '<tr>' + cols.map(c =>
+          '<th data-col="' + c.key + '" class="th-sort" onclick="sortTicketTable(\\'' + c.key + '\\')">'
+          + escapeHtml(c.label) + '<span class="sort-arrow" id="arrow-' + c.key + '"></span></th>').join('') + '</tr>'
+        + '<tr class="filter-row-inline">' + cols.map(c =>
+          '<th data-col="' + c.key + '"><input class="filter-input" placeholder="' + (c.type === 'number' ? '>5 <10 =3' : 'filter...')
+          + '" oninput="filterTicketTable(\\'' + c.key + '\\', this.value)" /></th>').join('') + '</tr>';
+      document.getElementById('ticket-columns').innerHTML =
+        '<details class="col-chooser"><summary>Columns ▾</summary><div class="col-menu">'
+        + '<div class="col-actions"><button onclick="setHiddenColumns(new Set())">Show all</button>'
+        + '<button onclick="setHiddenColumns(defaultHiddenColumns())">Reset</button></div>'
+        + cols.map(c => '<label><input type="checkbox" checked data-col="' + c.key + '" '
+          + 'onchange="toggleTicketColumn(\\'' + c.key + '\\', this.checked)"> ' + escapeHtml(c.label) + '</label>').join('')
+        + '</div></details>';
+      ticketState.hidden = loadHiddenColumns();
+      applyColumnVisibility();
     }
 
     function sortTicketTable(key) {
@@ -363,6 +421,7 @@ function generateHtml(m: SprintMetrics): string {
       renderTicketRows();
     }
 
+    renderTicketChrome();
     renderTicketRows();
   </script>
 </body>

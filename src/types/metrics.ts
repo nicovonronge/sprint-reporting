@@ -20,10 +20,13 @@ export interface SwimlaneTime {
   entries: SwimlaneTimeEntry[];
 }
 
-export interface TicketMetrics {
-  key: string;
-  summary: string;
-  issueType: string;
+/**
+ * Ticket data scoped to the sprint window: fields hold their value as of the sprint end date,
+ * and cycle counts / durations only cover activity between sprint start and end.
+ */
+export interface SprintReportData {
+  asOf: string;
+  status: string;
   assignee: string | null;
   qaAssignees: string[];
   storyPoints: number | null;
@@ -31,23 +34,43 @@ export interface TicketMetrics {
   qaPoints: number | null;
   rootCause: string | null;
   workCategory: string | null;
+  priority: string | null;
+  components: string[];
+  labels: string[];
+  fixVersions: string[];
+  affectsVersions: string[];
+
+  turnaroundMs: number | null;
+  swimlaneTimes: SwimlaneTime[];
+  devCycles: number;
+  qaCycles: number;
+}
+
+export interface TicketMetrics {
+  key: string;
+  summary: string;
+  issueType: string;
   currentStatus: string;
   createdDate: string;
+  updatedDate: string | null;
+  statusChangedDate: string | null;
+  reporter: string | null;
+  creator: string | null;
+  subtaskCount: number;
+  watchers: number;
+
+  // Sprint-scoped report data (period only, values as of sprint end)
+  sprintReport: SprintReportData;
 
   // Lifetime metrics (full ticket history)
   lifetimeTurnaroundMs: number | null;
   lifetimeSwimlaneTimes: SwimlaneTime[];
-
-  // Sprint-scoped metrics (clamped to sprint window)
-  sprintSwimlaneTimes: SwimlaneTime[];
 
   // Sprint carry-over
   sprintCount: number;
   sprintNames: string[];
   carryOverCount: number;
 
-  devCycles: number;
-  qaCycles: number;
   linkedDefects: number;
   linkedDefectKeys: string[];
 
@@ -70,7 +93,7 @@ export interface SprintMetrics {
   totalDevPoints: number;
   totalQaPoints: number;
 
-  avgLifetimeTurnaroundMs: number | null;
+  avgTurnaroundMs: number | null;
   avgSprintSwimlaneTimesMs: Record<string, number>;
   avgLifetimeSwimlaneTimesMs: Record<string, number>;
 

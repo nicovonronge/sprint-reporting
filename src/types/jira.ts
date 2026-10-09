@@ -25,6 +25,15 @@ export interface JiraIssueFields {
   resolution: JiraResolution | null;
   resolutiondate: string | null;
   priority: JiraPriority;
+  components?: Array<{ id: string; name: string }>;
+  labels?: string[];
+  fixVersions?: Array<{ id: string; name: string }>;
+  versions?: Array<{ id: string; name: string }>;
+  reporter?: JiraUser | null;
+  creator?: JiraUser | null;
+  subtasks?: Array<{ id: string; key: string }>;
+  watches?: { watchCount: number };
+  statuscategorychangedate?: string;
   [key: string]: unknown;
 }
 
@@ -101,6 +110,7 @@ export interface JiraChangelogHistory {
 
 export interface JiraChangelogItem {
   field: string;
+  fieldId?: string;
   fieldtype: string;
   from: string | null;
   fromString: string | null;
