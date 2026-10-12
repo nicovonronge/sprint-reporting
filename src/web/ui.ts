@@ -169,9 +169,9 @@ export function getUiHtml(): string {
     .print-only { display: none; }
 
     .info-btn {
-      position: fixed; top: 1rem; right: 1rem; z-index: 50; width: 34px; height: 34px; border-radius: 50%;
-      background: #334155; color: #e2e8f0; border: 2px solid #475569; font-weight: 700; font-style: italic;
-      font-family: Georgia, serif; font-size: 1.1rem; cursor: pointer;
+      position: fixed; top: 1rem; right: 1rem; z-index: 50; height: 34px; padding: 0 0.9rem; border-radius: 17px;
+      background: #334155; color: #e2e8f0; border: 2px solid #475569; font-weight: 600;
+      font-size: 0.85rem; cursor: pointer;
     }
     .info-btn:hover, .info-btn.open { background: #3b82f6; border-color: #3b82f6; }
     .info-panel {
@@ -214,7 +214,7 @@ export function getUiHtml(): string {
   </style>
 </head>
 <body>
-  <button class="info-btn" id="info-btn" title="What does this data mean?" onclick="toggleInfo()">i</button>
+  <button class="info-btn" id="info-btn" title="What does this data mean?" onclick="toggleInfo()">&#9432; Info</button>
   <div class="info-panel" id="info-panel"></div>
   <div class="container">
     <div class="header">
