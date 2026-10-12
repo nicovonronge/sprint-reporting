@@ -32,6 +32,18 @@ const laneList = Object.entries(SWIMLANE_STATUSES)
 
 const GENERAL: GuideSection[] = [
   {
+    title: 'Terms and abbreviations',
+    points: [
+      'SP = Story Points: the team\'s size estimate for a ticket (not hours). "Dev SP" and "QA SP" are the parts of that estimate for development and for QA.',
+      'Turnaround = working time from when a ticket started in the sprint to when it was finished (Done).',
+      'Cycles = how many times a ticket bounced back for rework (see "Cycles" below).',
+      'Lane = a group of Jira statuses, such as In Development or In QA.',
+      'Defects = bugs linked to a ticket in Jira.',
+      'PO = Product Owner. QA = Quality Assurance (testing). PR = pull request in GitHub.',
+      'Median = the middle value; it is less affected by one very slow ticket than the average.',
+    ],
+  },
+  {
     title: 'Where the data comes from',
     points: [
       'Ticket data and history come from Jira. Pull request times come from GitHub (only if GitHub is set up).',
