@@ -385,7 +385,8 @@ export function getUiHtml(): string {
 
     <!-- RESULTS -->
     <div id="results">
-      <span class="back-link" onclick="reset()">&#8592; Start Over</span>
+      <span class="back-link" onclick="backToWizard()">&#8592; Back to selections</span>
+      <span class="back-link" style="margin-left:1.5rem;color:#94a3b8" onclick="reset()">Start over</span>
       <div id="results-content"></div>
     </div>
   </div>
@@ -681,14 +682,12 @@ export function getUiHtml(): string {
           if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
           options = await fetchPeopleOptions();
           hideProgress();
-          document.getElementById('wizard').style.display = '';
         }
         state.peopleOptions = options;
         renderPeopleOptions();
         goStep('step-people-person');
       } catch (err) {
         hideProgress();
-        document.getElementById('wizard').style.display = '';
         alert('Error: ' + err.message);
       }
       btn.disabled = !peopleNextReady();
@@ -777,7 +776,7 @@ export function getUiHtml(): string {
     function showPeoplePrintPack(data) {
       setInfoKind('people');
       let html = '<div class="report-actions no-print">'
-        + '<button class="btn btn-secondary" onclick="reset()">New report</button>'
+        + '<button class="btn btn-secondary" onclick="backToWizard()">&#8592; Back to selections</button>'
         + '<button class="btn" onclick="window.print()">&#128424; Print / Save as PDF (' + data.reports.length + ' reports)</button></div>';
       if (data.skipped.length > 0) {
         html += '<p class="people-note no-print">Skipped: ' + data.skipped.map(s => escapeHtml(s.person + ' (' + s.reason + ')')).join('; ') + '</p>';
@@ -803,7 +802,7 @@ export function getUiHtml(): string {
         showResults(renderPeopleReport(state.peopleReport));
       } catch (err) {
         hideProgress();
-        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="reset()" style="margin-top:1rem">Try Again</button></div>');
+        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="backToWizard()" style="margin-top:1rem">Try Again</button></div>');
       }
     }
 
@@ -1045,7 +1044,7 @@ export function getUiHtml(): string {
         showResults(exportBar() + renderComparisonReport(data));
       } catch (err) {
         hideProgress();
-        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="reset()" style="margin-top:1rem">Try Again</button></div>');
+        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="backToWizard()" style="margin-top:1rem">Try Again</button></div>');
       }
     }
 
@@ -1117,8 +1116,30 @@ export function getUiHtml(): string {
       document.getElementById('progress-text').textContent = text;
     }
 
+    // Brings the wizard back unless results are on screen, so a download or an error
+    // that doesn't produce a results page leaves the user where they were.
     function hideProgress() {
       document.getElementById('progress').classList.remove('active');
+      if (!document.getElementById('results').classList.contains('active')) {
+        document.getElementById('wizard').style.display = '';
+      }
+    }
+
+    // The last wizard step before results, so "Back to selections" keeps everything chosen.
+    function resultsReturnStep() {
+      if (state.flow === 'compare') return 'step-compare-sprints';
+      if (state.flow === 'people') return 'step-people-person';
+      return state.action === 'fetch' ? 'step-action' : 'step-filters';
+    }
+
+    function backToWizard() {
+      const step = resultsReturnStep();
+      document.getElementById('info-panel').classList.remove('open');
+      document.getElementById('info-btn').classList.remove('open');
+      document.getElementById('results').className = '';
+      document.getElementById('results-content').innerHTML = '';
+      document.getElementById('wizard').style.display = '';
+      goStep(step);
     }
 
     function getFilters() {
@@ -1194,11 +1215,11 @@ export function getUiHtml(): string {
 
         if (action === 'fetch') {
           hideProgress();
-          showResults('<div style="text-align:center;padding:3rem"><h2 style="color:#4ade80">Data fetched successfully!</h2><p style="color:#94a3b8;margin-top:0.5rem">You can now run a Report or AI Analysis.</p><button class="btn" onclick="reset()" style="margin-top:1rem">Continue</button></div>');
+          showResults('<div style="text-align:center;padding:3rem"><h2 style="color:#4ade80">Data fetched successfully!</h2><p style="color:#94a3b8;margin-top:0.5rem">You can now run a Report or AI Analysis.</p><button class="btn" onclick="backToWizard()" style="margin-top:1rem">Continue</button></div>');
         }
       } catch (err) {
         hideProgress();
-        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="reset()" style="margin-top:1rem">Try Again</button></div>');
+        showResults('<div style="text-align:center;padding:3rem;color:#f87171"><h2>Error</h2><p>' + escapeHtml(err.message) + '</p><button class="btn btn-secondary" onclick="backToWizard()" style="margin-top:1rem">Try Again</button></div>');
       }
     }
 
