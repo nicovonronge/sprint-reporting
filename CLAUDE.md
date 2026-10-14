@@ -131,6 +131,16 @@ calculation, and don't "fix" the numbers back to raw wall-clock/status-transitio
   hand-rolled (`zipFiles`, no dependency). If you add or rename CSV columns, update the "Bulk downloads"
   section of the data guide.
 
+## Team name
+
+- Every report and export names the team next to the Jira project key (e.g. Mavericks / SQM). The
+  list lives in `TEAMS` in `src/constants/workflow.ts` (`getTeamName`); a project not on the list has
+  `teamName: null` and shows only its key. Add new teams there.
+- Shown in: sprint/comparison/people report headings (web, print, CLI, HTML report), the AI prompt, the
+  `teamName` field of `SprintMetrics`, `ComparisonEntry`, `PeopleReport` and every export's `generation`,
+  and a `team` column in the bulk CSVs (`summary.csv`, `tickets.csv`, `sprints.csv`).
+- Don't confuse it with `PeopleReport.team`, which is the comparison baseline (everyone in the same sprints).
+
 ## Data guide ("i" button)
 
 `src/constants/data-guide.ts` holds the plain-language explanation of these rules. It is shown by

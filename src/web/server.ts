@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import open from 'open';
 import { getConfig, hasGitHubToken, hasClaudeToken } from '../config.js';
 import { JiraClient } from '../clients/jira-client.js';
-import { PROJECT_BOARDS, PROJECT_REPOS } from '../constants/workflow.js';
+import { PROJECT_BOARDS, PROJECT_REPOS, TEAMS } from '../constants/workflow.js';
 import { save, load, listCached, findAnalysis, saveAnalysis, type CachedSprintData } from '../cache/cache-manager.js';
 import { GitHubClient } from '../clients/github-client.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from '../services/metrics-calculator.js';
@@ -31,14 +31,6 @@ function parsePeriod(raw: unknown): PeoplePeriod | undefined {
   }
   return { from: p.from, to: p.to };
 }
-
-const TEAMS = [
-  { key: 'SQM', name: 'Mavericks' },
-  { key: 'IFRS', name: 'Black Knights' },
-  { key: 'AUD', name: 'A-Team' },
-  { key: 'TAN', name: 'Titans' },
-  { key: 'GM', name: 'Green Mambas' },
-];
 
 // Filters arrive from the UI as comma-separated strings.
 function toFilterOptions(filters: any): FilterOptions {

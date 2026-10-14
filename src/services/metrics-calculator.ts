@@ -13,7 +13,7 @@ import {
 import { countDevCycles, countQaCycles } from './cycle-counter.js';
 import { statusAt, textAt, numberAt, labelsAt, namesAt, usersAt } from './point-in-time.js';
 import { detectLinkedDefects } from './defect-detector.js';
-import { CUSTOM_FIELDS, SWIMLANE_ORDER, STATUS_TO_SWIMLANE, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
+import { CUSTOM_FIELDS, SWIMLANE_ORDER, STATUS_TO_SWIMLANE, EXCLUDED_SWIMLANE, getTeamName } from '../constants/workflow.js';
 import { businessMsBetween } from '../utils/date-utils.js';
 
 export function calculateTicketMetrics(
@@ -236,6 +236,7 @@ export function aggregateSprintMetrics(
     sprintStartDate: data.sprintStartDate,
     sprintEndDate: data.sprintEndDate,
     projectKey: data.projectKey,
+    teamName: getTeamName(data.projectKey),
     totalTickets: tickets.length,
     completedTickets: completed.length,
     newTickets,

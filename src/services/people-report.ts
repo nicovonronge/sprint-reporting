@@ -3,7 +3,7 @@ import { statusAt } from './point-in-time.js';
 import { calculateSprintMetrics, calculateTicketMetrics } from './metrics-calculator.js';
 import { getDataGuide } from '../constants/data-guide.js';
 import {
-  SWIMLANE_ORDER, EXCLUDED_SWIMLANE, STATUS_TO_SWIMLANE, CUSTOM_FIELDS, DEV_CYCLE_STATUS, QA_CYCLE_STATUS, BUG_ISSUE_TYPE,
+  SWIMLANE_ORDER, EXCLUDED_SWIMLANE, STATUS_TO_SWIMLANE, CUSTOM_FIELDS, DEV_CYCLE_STATUS, QA_CYCLE_STATUS, BUG_ISSUE_TYPE, getTeamName,
 } from '../constants/workflow.js';
 import type { JiraIssue } from '../types/jira.js';
 import type { TicketMetrics } from '../types/metrics.js';
@@ -173,6 +173,7 @@ export function buildPeopleReport(
 
   return {
     projectKey,
+    teamName: getTeamName(projectKey),
     person,
     accountId: findAccountId(sprints, person),
     role,

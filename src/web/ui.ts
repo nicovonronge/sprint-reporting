@@ -848,7 +848,7 @@ export function getUiHtml(): string {
         + '<button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button></div>';
 
       html += '<h2 style="margin-top:0.5rem">' + escapeHtml(r.person) + ' — ' + roleLabel + ' performance review</h2>';
-      html += '<p style="color:#94a3b8;margin-bottom:0.5rem">' + escapeHtml(r.projectKey) + ' &middot; '
+      html += '<p style="color:#94a3b8;margin-bottom:0.5rem">' + escapeHtml(r.teamName ? r.teamName + ' (' + r.projectKey + ')' : r.projectKey) + ' &middot; '
         + (byDate
           ? range + ' (tickets from ' + r.sprints.length + ' sprint(s): ' + sprintNames.join(', ') + ')'
           : r.sprints.length + ' sprint(s): ' + sprintNames.join(', ') + (range ? ' (' + range + ')' : '')) + '</p>';
@@ -1227,7 +1227,7 @@ export function getUiHtml(): string {
     }
 
     function renderMetrics(m) {
-      let html = '<h2>' + m.sprintName + ' (' + m.projectKey + ')</h2>';
+      let html = '<h2>' + m.sprintName + ' (' + (m.teamName ? escapeHtml(m.teamName) + ', ' : '') + m.projectKey + ')</h2>';
       const swimlaneLabels = Object.keys(m.avgSprintSwimlaneTimesMs).filter(s => m.avgSprintSwimlaneTimesMs[s] || m.avgLifetimeSwimlaneTimesMs[s]);
 
       // Summary cards
@@ -1325,8 +1325,9 @@ export function getUiHtml(): string {
         ? new Date(entries[0].sprintStartDate).toLocaleDateString() + ' – ' + new Date(entries[entries.length - 1].sprintEndDate || entries[entries.length - 1].sprintStartDate).toLocaleDateString()
         : '';
 
-      let html = '<h2>Sprint Comparison Report</h2>';
-      html += '<p style="color:#94a3b8;margin-bottom:1rem">' + entries.length + ' sprints (' + dateRange + ') &middot; '
+      const cmpTeam = entries.length > 0 && entries[0].teamName ? entries[0].teamName : null;
+      let html = '<h2>Sprint Comparison Report' + (cmpTeam ? ' — ' + escapeHtml(cmpTeam) : '') + '</h2>';
+      html += '<p style="color:#94a3b8;margin-bottom:1rem">' + (entries.length > 0 ? escapeHtml(entries[0].projectKey) + ' &middot; ' : '') + entries.length + ' sprints (' + dateRange + ') &middot; '
         + totalExcluded + ' ticket(s) excluded across all sprints (unassigned or non-dev assignee)</p>';
 
       html += '<h3>Per-Sprint Overview</h3><table><thead><tr>'

@@ -88,6 +88,8 @@ export interface SprintMetrics {
   sprintStartDate: string;
   sprintEndDate: string;
   projectKey: string;
+  /** Team that owns the project (see TEAMS in constants/workflow.ts); null if the project isn't listed. */
+  teamName: string | null;
 
   totalTickets: number;
   completedTickets: number;

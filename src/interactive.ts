@@ -3,17 +3,9 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { getConfig, hasGitHubToken, hasClaudeToken } from './config.js';
 import { JiraClient } from './clients/jira-client.js';
-import { PROJECT_BOARDS, PROJECT_REPOS } from './constants/workflow.js';
+import { PROJECT_BOARDS, PROJECT_REPOS, TEAMS } from './constants/workflow.js';
 import type { JiraSprint } from './types/jira.js';
 import * as log from './utils/logger.js';
-
-const TEAMS: { key: string; name: string }[] = [
-  { key: 'SQM', name: 'Mavericks' },
-  { key: 'IFRS', name: 'Black Knights' },
-  { key: 'AUD', name: 'A-Team' },
-  { key: 'TAN', name: 'Titans' },
-  { key: 'GM', name: 'Green Mambas' },
-];
 
 export async function runInteractive(): Promise<void> {
   console.log(chalk.bold('\n  Sprint Report Tool\n'));
