@@ -157,3 +157,22 @@ change any rule above, update the guide too** (and the AI analysis note below).
 `buildAnalysisPrompt` in `src/services/claude-analyzer.ts` tells Claude these adjustments have
 already been applied, so it doesn't flag a missing `ESCALATED` row or a short Todo time as an
 anomaly. If you change the rules above, update that note too.
+
+## Public repo — no sensitive information
+
+This repo is public (github.com/nicovonronge/sprint-reporting). Nothing sensitive may be committed or
+pushed, in any branch or in history. Before every commit/push, check what is being staged.
+
+- **Never commit:** credentials (Jira/GitHub/Claude tokens, API keys, `.env`), fetched Jira data or
+  cache (`data/`), generated reports/exports (`output/`, people-report JSON/CSV/ZIP), real ticket keys
+  or summaries, real people's names or emails, internal URLs/domains, or test logs with real data.
+- **Org-specific values** (project→repo mappings, board IDs, excluded-assignee names) belong in the
+  gitignored `workflow.config.json`; only dummy values go in `workflow.config.example.json`. Likewise
+  `.env.example` and test fixtures use placeholders only (`your-site.atlassian.net`, fake names/keys).
+- **New files:** if a new kind of local/generated file appears, add it to `.gitignore` first.
+- **Audit command:** `git ls-files` plus `git grep -nIE "token|secret|password|api[_-]?key|@adaptit|atlassian\.net"`
+  should show only placeholders. Check `git log --all` too — a secret removed in a later commit is
+  still public. If one leaks, revoke/rotate it first, then rewrite history.
+- Don't use `git push --mirror`/`--all` (local-only refs such as `refs/t3/*` would be sent).
+- The team list in `TEAMS` (`src/constants/workflow.ts`) is accepted as non-sensitive; don't add
+  anything more revealing there.
