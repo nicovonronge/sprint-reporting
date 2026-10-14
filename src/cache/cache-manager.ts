@@ -23,6 +23,11 @@ export interface CachedSprintData {
   sprintEndDate: string;
   issues: JiraIssue[];
   githubData: Record<string, GitHubPR[]>;
+  /**
+   * Bugs created during the sprint window, in the sprint or not (people report: bugs a person
+   * reported). Absent in data fetched before this existed — re-fetch to get it.
+   */
+  reportedBugs?: JiraIssue[];
   analyses?: CachedAnalysis[];
 }
 

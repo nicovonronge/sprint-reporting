@@ -32,6 +32,7 @@ export interface JiraIssueFields {
   reporter?: JiraUser | null;
   creator?: JiraUser | null;
   subtasks?: Array<{ id: string; key: string }>;
+  parent?: { id: string; key: string; fields?: { summary?: string; issuetype?: JiraIssueType } } | null;
   watches?: { watchCount: number };
   statuscategorychangedate?: string;
   [key: string]: unknown;

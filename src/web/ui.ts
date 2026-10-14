@@ -167,6 +167,10 @@ export function getUiHtml(): string {
     .delta-good { color: #4ade80; }
     .delta-bad { color: #f87171; }
     .print-only { display: none; }
+    .bulk-box { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #334155; }
+    .bulk-box h4 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .bulk-list { max-height: 14rem; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.5rem 0; }
+    .bulk-list label { display: flex; gap: 0.5rem; align-items: center; padding: 0.15rem 0; font-size: 0.88rem; cursor: pointer; }
 
     .info-btn {
       position: fixed; top: 1rem; right: 1rem; z-index: 50; height: 34px; padding: 0 0.9rem; border-radius: 17px;
@@ -206,6 +210,7 @@ export function getUiHtml(): string {
       .delta-good { color: #15803d; }
       .delta-bad { color: #b91c1c; }
       .people-section { break-inside: avoid; }
+      .print-page + .print-page { break-before: page; }
     }
 
     @media (max-width: 768px) {
@@ -262,6 +267,25 @@ export function getUiHtml(): string {
         <div class="step-label">People Report — Select the Sprints to Review</div>
         <div class="sprint-list" id="people-sprint-list"></div>
         <div class="hint">Pick every sprint in the review period. Sprints that haven't been fetched yet can be fetched for you.</div>
+        <div class="people-controls">
+          <div><label for="people-mode">Report on</label>
+            <select id="people-mode" onchange="togglePeopleMode()">
+              <option value="sprints">All of each selected sprint</option>
+              <option value="dateRange">A date range (from – to)</option>
+            </select></div>
+          <div id="people-dates" style="display:none">
+            <label>From / to (inclusive, UTC)</label>
+            <div style="display:flex;gap:0.5rem">
+              <input type="date" id="people-from" onchange="updatePeopleNext()">
+              <input type="date" id="people-to" onchange="updatePeopleNext()">
+            </div>
+            <label style="margin-top:0.6rem">Previous period, optional (for "versus last period")</label>
+            <div style="display:flex;gap:0.5rem">
+              <input type="date" id="people-prev-from">
+              <input type="date" id="people-prev-to">
+            </div></div>
+        </div>
+        <div class="hint" id="people-mode-hint" style="display:none">Tickets are taken from the selected sprints, so select every sprint that overlaps your dates. Status, assignee, points, cycles and lane time are all worked out as at the "to" date; only activity inside the dates counts.</div>
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="backToTeamFromPeople()">Back</button>
           <button class="btn" id="btn-people-next" disabled onclick="peopleSprintsNext()">Next</button>
@@ -281,6 +305,22 @@ export function getUiHtml(): string {
             <select id="people-person" onchange="document.getElementById('btn-people-generate').disabled = !this.value"></select></div>
         </div>
         <div class="hint" id="people-person-hint"></div>
+        <div class="bulk-box">
+          <h4>Or download for several people at once</h4>
+          <div class="hint" style="margin:0">Uses the role, sprints and dates chosen above. Nothing is fetched from Jira.</div>
+          <div class="bulk-list" id="people-bulk-list"></div>
+          <div class="people-controls">
+            <div><label for="people-bulk-format">Format</label>
+              <select id="people-bulk-format">
+                <option value="zip">ZIP: one JSON per person + summary.csv + tickets.csv</option>
+                <option value="csv">One summary CSV (opens in Excel)</option>
+                <option value="print">Combined print pack (one person per page, print / save as PDF)</option>
+              </select></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btn-people-bulk" disabled onclick="downloadPeopleBulk()">Download selected</button>
+          </div>
+        </div>
         <div class="btn-row">
           <button class="btn btn-secondary" onclick="goStep('step-people-sprints')">Back</button>
           <button class="btn" id="btn-people-generate" disabled onclick="generatePeopleReport()">Generate Report</button>
@@ -422,7 +462,36 @@ export function getUiHtml(): string {
     // JSON export of the report on screen. state.exportRequest says which endpoint and what to send;
     // the server builds the file (data plus an info block explaining it).
     function exportBar() {
-      return '<div class="report-actions no-print"><button class="btn btn-secondary" onclick="downloadExport()">&#11015; Export JSON</button></div>';
+      const req = state.exportRequest;
+      const bulk = req && req.url === '/api/export/sprint-report' && req.body.sprintNames.length > 1;
+      return '<div class="report-actions no-print"><button class="btn btn-secondary" onclick="downloadExport()">&#11015; Export JSON</button>'
+        + (bulk ? '<button class="btn btn-secondary" onclick="downloadSprintBulk()" title="One JSON file per sprint plus a one-row-per-sprint CSV">&#11015; All sprints (ZIP)</button>' : '')
+        + '<button class="btn" onclick="window.print()" title="Prints every report on the page, one sprint per page">&#128424; Print / Save as PDF</button></div>';
+    }
+
+    // Saves a fetch Response (zip/csv) using the file name the server chose.
+    async function saveResponse(res, fallbackName) {
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      const match = /filename="?([^";]+)"?/.exec(res.headers.get('Content-Disposition') || '');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = match ? match[1] : fallbackName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function downloadSprintBulk() {
+      const req = state.exportRequest;
+      if (!req) return;
+      try {
+        await saveResponse(await fetch('/api/export/sprint-report/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body),
+        }), 'sprint-reports.zip');
+      } catch (err) {
+        alert('Download failed: ' + err.message);
+      }
     }
 
     async function downloadExport() {
@@ -544,7 +613,7 @@ export function getUiHtml(): string {
               item.classList.remove('selected');
               state.peopleSprints = state.peopleSprints.filter(n => n !== s.name);
             }
-            document.getElementById('btn-people-next').disabled = state.peopleSprints.length === 0;
+            updatePeopleNext();
           });
           list.appendChild(item);
         });
@@ -553,11 +622,41 @@ export function getUiHtml(): string {
       });
     }
 
+    // The custom window, or undefined when reporting on whole sprints.
+    function peoplePeriod() {
+      if (document.getElementById('people-mode').value !== 'dateRange') return undefined;
+      return { from: document.getElementById('people-from').value, to: document.getElementById('people-to').value };
+    }
+
+    // Optional earlier range to compare against; only used with a date range.
+    function peoplePreviousPeriod() {
+      if (!peoplePeriod()) return undefined;
+      const from = document.getElementById('people-prev-from').value, to = document.getElementById('people-prev-to').value;
+      return from && to ? { from, to } : undefined;
+    }
+
+    function peopleNextReady() {
+      if (state.peopleSprints.length === 0) return false;
+      const p = peoplePeriod();
+      return !p || (!!p.from && !!p.to && p.from <= p.to);
+    }
+
+    function updatePeopleNext() {
+      document.getElementById('btn-people-next').disabled = !peopleNextReady();
+    }
+
+    function togglePeopleMode() {
+      const range = document.getElementById('people-mode').value === 'dateRange';
+      document.getElementById('people-dates').style.display = range ? '' : 'none';
+      document.getElementById('people-mode-hint').style.display = range ? '' : 'none';
+      updatePeopleNext();
+    }
+
     async function fetchPeopleOptions() {
       const res = await fetch('/api/people/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints }),
+        body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints, period: peoplePeriod() }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
       return res.json();
@@ -592,7 +691,7 @@ export function getUiHtml(): string {
         document.getElementById('wizard').style.display = '';
         alert('Error: ' + err.message);
       }
-      btn.disabled = state.peopleSprints.length === 0;
+      btn.disabled = !peopleNextReady();
     }
 
     function renderPeopleOptions() {
@@ -602,9 +701,89 @@ export function getUiHtml(): string {
       select.innerHTML = '<option value="">Select a person...</option>'
         + people.map(p => '<option value="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + ' (' + p.tickets + ' tickets)</option>').join('');
       document.getElementById('btn-people-generate').disabled = true;
+      renderBulkPeople(people);
       document.getElementById('people-person-hint').textContent = people.length === 0
         ? 'Nobody is recorded in this role for the selected sprints.'
-        : 'Ticket counts are across the selected sprints.';
+        : (peoplePeriod() ? 'Ticket counts are for the chosen dates.' : 'Ticket counts are across the selected sprints.');
+    }
+
+    // Checklist for bulk download: a "select all" row, then one row per person in the chosen role.
+    function renderBulkPeople(people) {
+      const list = document.getElementById('people-bulk-list');
+      if (people.length === 0) {
+        list.innerHTML = '<span class="text-dim">Nobody in this role.</span>';
+      } else {
+        list.innerHTML = '<label><input type="checkbox" id="people-bulk-all" onchange="toggleBulkAll(this.checked)"> <strong>Select all (' + people.length + ')</strong></label>'
+          + people.map(p => '<label><input type="checkbox" class="people-bulk-item" value="' + escapeHtml(p.name) + '" onchange="updateBulkButton()"> '
+            + escapeHtml(p.name) + ' <span class="text-dim">(' + p.tickets + ' tickets)</span></label>').join('');
+      }
+      updateBulkButton();
+    }
+
+    function selectedBulkPeople() {
+      return [...document.querySelectorAll('.people-bulk-item:checked')].map(cb => cb.value);
+    }
+
+    function toggleBulkAll(checked) {
+      document.querySelectorAll('.people-bulk-item').forEach(cb => { cb.checked = checked; });
+      updateBulkButton();
+    }
+
+    function updateBulkButton() {
+      const n = selectedBulkPeople().length;
+      const all = document.getElementById('people-bulk-all');
+      if (all) all.checked = n > 0 && n === document.querySelectorAll('.people-bulk-item').length;
+      const btn = document.getElementById('btn-people-bulk');
+      btn.disabled = n === 0;
+      btn.textContent = n === 0 ? 'Download selected' : 'Download ' + n + ' selected';
+    }
+
+    async function downloadPeopleBulk() {
+      const people = selectedBulkPeople();
+      const format = document.getElementById('people-bulk-format').value;
+      if (people.length === 0) return;
+      const body = {
+        projectKey: state.team, sprintNames: state.peopleSprints, people,
+        role: document.getElementById('people-role').value,
+        period: peoplePeriod(), previousPeriod: peoplePreviousPeriod(),
+        format: format === 'print' ? 'json' : format,
+      };
+      showProgress('Building reports for ' + people.length + ' people...');
+      try {
+        const res = await fetch('/api/people/report/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (format !== 'print') {
+          await saveResponse(res, 'people-reports.' + format);
+          hideProgress();
+          if (format === 'zip' || format === 'csv') {
+            alert('Downloaded ' + people.length + ' report(s). Times in the CSV files are business hours.');
+          }
+          return;
+        }
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+        const data = await res.json();
+        hideProgress();
+        showPeoplePrintPack(data);
+      } catch (err) {
+        hideProgress();
+        alert('Bulk download failed: ' + err.message);
+      }
+    }
+
+    // All selected people on one page, one person per printed page.
+    function showPeoplePrintPack(data) {
+      setInfoKind('people');
+      let html = '<div class="report-actions no-print">'
+        + '<button class="btn btn-secondary" onclick="reset()">New report</button>'
+        + '<button class="btn" onclick="window.print()">&#128424; Print / Save as PDF (' + data.reports.length + ' reports)</button></div>';
+      if (data.skipped.length > 0) {
+        html += '<p class="people-note no-print">Skipped: ' + data.skipped.map(s => escapeHtml(s.person + ' (' + s.reason + ')')).join('; ') + '</p>';
+      }
+      html += data.reports.map(r => '<div class="print-page">' + renderPeopleReport(r, { noActions: true }) + '</div>').join('');
+      showResults(html);
     }
 
     async function generatePeopleReport() {
@@ -615,7 +794,7 @@ export function getUiHtml(): string {
         const res = await fetch('/api/people/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints, person, role }),
+          body: JSON.stringify({ projectKey: state.team, sprintNames: state.peopleSprints, person, role, period: peoplePeriod(), previousPeriod: peoplePreviousPeriod() }),
         });
         if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
         state.peopleReport = await res.json();
@@ -648,7 +827,8 @@ export function getUiHtml(): string {
       return '<span class="' + (good ? 'delta-good' : 'delta-bad') + '">' + (pct > 0 ? '+' : '') + pct + '%</span>';
     }
 
-    function renderPeopleReport(r) {
+    function renderPeopleReport(r, opts) {
+      opts = opts || {};
       const roleLabel = r.role === 'dev' ? 'Developer' : 'QA';
       const cycleLabel = r.role === 'dev' ? 'Dev cycles (QA Failed)' : 'QA cycles (PO Review Failed)';
       const s = r.summary, t = r.team;
@@ -656,20 +836,28 @@ export function getUiHtml(): string {
       const pct = v => v == null ? 'N/A' : Math.round(v * 100) + '%';
       const sprintNames = r.sprints.map(x => escapeHtml(x.sprintName));
       const first = r.sprints[0], last = r.sprints[r.sprints.length - 1];
-      const range = first
-        ? new Date(first.sprintStartDate).toLocaleDateString() + ' – ' + new Date(last.sprintEndDate || last.sprintStartDate).toLocaleDateString()
-        : '';
+      const byDate = r.mode === 'dateRange' && r.period;
+      const range = byDate
+        ? r.period.from + ' to ' + r.period.to
+        : first
+          ? new Date(first.sprintStartDate).toLocaleDateString() + ' – ' + new Date(last.sprintEndDate || last.sprintStartDate).toLocaleDateString()
+          : '';
 
-      let html = '<div class="report-actions no-print">'
+      let html = opts.noActions ? '' : '<div class="report-actions no-print">'
         + '<button class="btn btn-secondary" onclick="downloadPeopleReport()">&#11015; Export JSON</button>'
         + '<button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button></div>';
 
       html += '<h2 style="margin-top:0.5rem">' + escapeHtml(r.person) + ' — ' + roleLabel + ' performance review</h2>';
-      html += '<p style="color:#94a3b8;margin-bottom:0.5rem">' + escapeHtml(r.projectKey) + ' &middot; ' + r.sprints.length + ' sprint(s): '
-        + sprintNames.join(', ') + (range ? ' (' + range + ')' : '') + '</p>';
+      html += '<p style="color:#94a3b8;margin-bottom:0.5rem">' + escapeHtml(r.projectKey) + ' &middot; '
+        + (byDate
+          ? range + ' (tickets from ' + r.sprints.length + ' sprint(s): ' + sprintNames.join(', ') + ')'
+          : r.sprints.length + ' sprint(s): ' + sprintNames.join(', ') + (range ? ' (' + range + ')' : '')) + '</p>';
       html += '<p class="print-only" style="margin-bottom:0.5rem">Generated ' + new Date(r.generatedAt).toLocaleString() + '</p>';
-      html += '<p class="people-note">Each ticket is credited to this person in a sprint when they are the ' + (r.role === 'dev' ? 'assignee' : 'QA assignee')
-        + ' at that sprint\\'s end. Cycles and time in lane only count activity inside each selected sprint; weekends are excluded. '
+      const who = r.role === 'dev' ? 'assignee' : 'QA assignee';
+      html += '<p class="people-note">' + (byDate
+        ? 'Everything is measured as at the end of ' + r.period.to + '. A ticket is credited to this person when they are the assignee or a QA assignee on that date (' + who + ' is the role being reviewed), and only tickets with activity between ' + r.period.from + ' and ' + r.period.to + ' are included. Status, points, cycles and time in lane are as at that date; '
+        : 'Each ticket is credited to this person in a sprint when they are the assignee or a QA assignee at that sprint\\'s end (' + who + ' is the role being reviewed). Cycles and time in lane only count activity inside each selected sprint; ')
+        + 'only Mon-Fri 08:00-17:00 UTC counts. '
         + 'Linked defects are lifetime counts for the ticket. Treat small ticket counts with caution.</p>';
 
       html += '<div class="people-section"><h3>Headline numbers</h3><div class="summary-grid">';
@@ -681,7 +869,32 @@ export function getUiHtml(): string {
       html += statCard(cycleLabel, s.totalCycles + ' <span class="text-dim" style="font-size:0.8rem">(' + s.avgCyclesPerTicket.toFixed(2) + ' / ticket)</span>');
       html += statCard('No-rework tickets', pct(s.reworkFreeRate) + ' <span class="text-dim" style="font-size:0.8rem">(' + s.ticketsWithoutRework + ')</span>');
       html += statCard('Linked defects', s.linkedDefects);
+      html += statCard('Dev SP / QA SP', s.devStoryPoints + ' / ' + s.qaStoryPoints + ' <span class="text-dim" style="font-size:0.8rem">(' + s.completedDevStoryPoints + ' / ' + s.completedQaStoryPoints + ' done)</span>');
+      html += statCard('Credited as', s.ticketsAsAssignee + ' assignee, ' + s.ticketsAsQaAssignee + ' QA');
+      html += statCard('No activity in period', s.ticketsWithNoActivity);
       html += '</div></div>';
+
+      if (r.previousPeriod) {
+        const p = r.previousPeriod, ps = p.summary;
+        html += '<div class="people-section"><h3>Versus previous period (' + p.period.from + ' to ' + p.period.to + ')</h3>';
+        if (!ps) {
+          html += '<p class="people-note">No fetched sprint overlaps that period. Fetch the sprints it covers and generate again.</p>';
+        } else {
+          html += '<p class="people-note">Tickets came from: ' + p.sprintsUsed.map(escapeHtml).join(', ') + '. Make sure every sprint overlapping the previous dates is fetched.</p>'
+            + '<table><thead><tr><th>Measure</th><th>Now</th><th>Previous</th><th>Change</th></tr></thead><tbody>';
+          const cmpPrev = (label, a, b, text, lowerIsBetter) => {
+            html += '<tr><td>' + label + '</td><td>' + text(a) + '</td><td>' + text(b) + '</td><td>' + deltaVsTeam(a, b, lowerIsBetter) + '</td></tr>';
+          };
+          cmpPrev('Tickets', s.tickets, ps.tickets, v => v, false);
+          cmpPrev('Completed', s.completed, ps.completed, v => v, false);
+          cmpPrev('Story points', s.storyPoints, ps.storyPoints, v => v, false);
+          cmpPrev('Avg turnaround', s.avgTurnaroundMs, ps.avgTurnaroundMs, fmt, true);
+          cmpPrev('Cycles per ticket', s.avgCyclesPerTicket, ps.avgCyclesPerTicket, v => v.toFixed(2), true);
+          cmpPrev('No-rework tickets', s.reworkFreeRate, ps.reworkFreeRate, pct, false);
+          html += '</tbody></table>';
+        }
+        html += '</div>';
+      }
 
       html += '<div class="people-section"><h3>Compared with the team</h3><table><thead><tr><th>Measure</th><th>' + escapeHtml(r.person) + '</th><th>Team</th><th>Difference</th></tr></thead><tbody>';
       const cmp = (label, a, b, text, lowerIsBetter) => {
@@ -706,13 +919,15 @@ export function getUiHtml(): string {
       if (lanes.length === 0) html += '<tr><td colspan="6" class="text-dim">No lane time recorded in these sprints.</td></tr>';
       html += '</tbody></table></div>';
 
-      html += '<div class="people-section"><h3>By sprint</h3><table><thead><tr><th>Sprint</th><th>Tickets</th><th>Completed</th><th>SP</th><th>Avg turnaround</th><th>Cycles</th><th>No-rework</th></tr></thead><tbody>';
-      r.bySprint.forEach(b => {
-        const x = b.summary;
-        html += '<tr><td>' + escapeHtml(b.sprintName) + '</td><td>' + x.tickets + '</td><td>' + x.completed + '</td><td>' + x.storyPoints
-          + '</td><td>' + fmt(x.avgTurnaroundMs) + '</td><td>' + x.totalCycles + '</td><td>' + pct(x.reworkFreeRate) + '</td></tr>';
-      });
-      html += '</tbody></table></div>';
+      if (r.bySprint.length > 0) {
+        html += '<div class="people-section"><h3>By sprint</h3><table><thead><tr><th>Sprint</th><th>Tickets</th><th>Completed</th><th>SP</th><th>Avg turnaround</th><th>Cycles</th><th>No-rework</th></tr></thead><tbody>';
+        r.bySprint.forEach(b => {
+          const x = b.summary;
+          html += '<tr><td>' + escapeHtml(b.sprintName) + '</td><td>' + x.tickets + '</td><td>' + x.completed + '</td><td>' + x.storyPoints
+            + '</td><td>' + fmt(x.avgTurnaroundMs) + '</td><td>' + x.totalCycles + '</td><td>' + pct(x.reworkFreeRate) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
 
       html += '<div class="people-section"><h3>By issue type</h3><table><thead><tr><th>Type</th><th>Tickets</th><th>SP</th><th>Avg turnaround</th><th>Avg cycles</th></tr></thead><tbody>';
       r.byIssueType.forEach(b => {
@@ -721,14 +936,35 @@ export function getUiHtml(): string {
       });
       html += '</tbody></table></div>';
 
-      html += '<h3>Tickets (' + r.tickets.length + ')</h3><div class="table-scroll"><table><thead><tr><th>Key</th><th>Summary</th><th>Type</th><th>Sprints</th><th>Status</th><th>SP</th><th>Turnaround</th><th>Cycles</th><th>Defects</th></tr></thead><tbody>';
+      html += '<h3>Tickets (' + r.tickets.length + ')</h3><div class="table-scroll"><table><thead><tr><th>Key</th><th>Summary</th><th>Type</th><th>Credited</th><th>Sprints</th><th>Status</th><th>Now</th><th>Created</th><th>SP (dev/QA)</th><th>Turnaround</th><th>Cycles</th><th>Defects</th><th>Flags</th></tr></thead><tbody>';
       r.tickets.forEach(tk => {
         const cycles = r.role === 'dev' ? tk.devCycles : tk.qaCycles;
         html += '<tr><td>' + escapeHtml(tk.key) + '</td><td style="white-space:normal;min-width:16rem">' + escapeHtml(tk.summary) + '</td><td>' + escapeHtml(tk.issueType)
-          + '</td><td>' + tk.sprints.length + '</td><td>' + escapeHtml(tk.status) + '</td><td>' + (tk.storyPoints == null ? '-' : tk.storyPoints)
-          + '</td><td>' + (tk.turnaroundMs == null ? '-' : formatMs(tk.turnaroundMs)) + '</td><td>' + cycles + '</td><td>' + tk.linkedDefects + '</td></tr>';
+          + '</td><td>' + tk.creditedAs.map(c => c === 'assignee' ? 'Assignee' : 'QA').join(' + ')
+          + '</td><td>' + tk.sprints.length + (tk.lifetimeSprintCount > tk.sprints.length ? ' (of ' + tk.lifetimeSprintCount + ')' : '')
+          + '</td><td>' + escapeHtml(tk.status) + '</td><td>' + escapeHtml(tk.statusNow) + '</td><td>' + tk.created.slice(0, 10)
+          + '</td><td>' + (tk.storyPoints == null ? '-' : tk.storyPoints)
+          + ' <span class="text-dim">(' + (tk.devStoryPoints == null ? '-' : tk.devStoryPoints) + '/' + (tk.qaStoryPoints == null ? '-' : tk.qaStoryPoints) + ')</span>'
+          + '</td><td>' + (tk.turnaroundMs == null ? '-' : formatMs(tk.turnaroundMs)) + '</td><td>' + cycles + '</td><td>' + tk.linkedDefects
+          + '</td><td>' + [tk.nextPI ? 'Next PI' : '', tk.noActivityInRange ? 'No activity' : ''].filter(Boolean).join(', ') + '</td></tr>';
       });
       html += '</tbody></table></div>';
+
+      html += '<div class="people-section"><h3>Bugs reported by ' + escapeHtml(r.person) + (r.reportedBugs ? ' (' + r.reportedBugs.length + ')' : '') + '</h3>';
+      if (!r.reportedBugs) {
+        html += '<p class="people-note">Not available: the selected sprints were fetched before reported bugs were collected. Fetch them again to include this.</p>';
+      } else {
+        if (!r.reportedBugsComplete) html += '<p class="people-note">Some selected sprints were fetched before reported bugs were collected, so this list may be incomplete. Fetch them again.</p>';
+        html += '<div class="table-scroll"><table><thead><tr><th>Key</th><th>Summary</th><th>Created</th><th>Priority</th><th>Status at end</th><th>Status now</th><th>Resolved</th><th>Flags</th></tr></thead><tbody>';
+        r.reportedBugs.forEach(b => {
+          html += '<tr><td>' + escapeHtml(b.key) + '</td><td style="white-space:normal;min-width:16rem">' + escapeHtml(b.summary) + '</td><td>' + b.created.slice(0, 10)
+            + '</td><td>' + escapeHtml(b.priority || '-') + '</td><td>' + escapeHtml(b.statusAtPeriodEnd) + '</td><td>' + escapeHtml(b.statusNow)
+            + '</td><td>' + (b.resolved ? b.resolved.slice(0, 10) : '-') + '</td><td>' + (b.nextPI ? 'Next PI' : '') + '</td></tr>';
+        });
+        if (r.reportedBugs.length === 0) html += '<tr><td colspan="8" class="text-dim">No bugs reported in this period.</td></tr>';
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
 
       return html;
     }
@@ -920,7 +1156,7 @@ export function getUiHtml(): string {
             });
             if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
             const metrics = await res.json();
-            allHtml += renderMetrics(metrics);
+            allHtml += '<div class="print-page">' + renderMetrics(metrics) + '</div>';
           }
           hideProgress();
           setInfoKind('sprint');

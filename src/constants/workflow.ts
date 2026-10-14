@@ -70,6 +70,9 @@ export const PROJECT_BOARDS: Record<string, number> = workflowConfig.projectBoar
 // primary assignee only, never the QA assignee. See CLAUDE.md for the full rule.
 export const COMPARISON_EXCLUDED_ASSIGNEES: string[] = workflowConfig.comparisonExcludedAssignees;
 
+// Issue type of the bugs counted as "reported by" a person in the people report.
+export const BUG_ISSUE_TYPE = 'Bug';
+
 export const DEV_CYCLE_STATUS = 'QA Failed';
 export const QA_CYCLE_STATUS = 'PO Review Failed';
 
@@ -82,7 +85,7 @@ export const JIRA_FIELDS_TO_FETCH = [
   'summary', 'status', 'assignee', 'issuetype', 'issuelinks',
   'created', 'updated', 'resolution', 'resolutiondate', 'priority',
   'components', 'labels', 'fixVersions', 'versions', 'reporter', 'creator',
-  'subtasks', 'watches', 'statuscategorychangedate',
+  'subtasks', 'parent', 'watches', 'statuscategorychangedate',
   CUSTOM_FIELDS.SPRINT,
   CUSTOM_FIELDS.STORY_POINTS,
   CUSTOM_FIELDS.QA_ASSIGNEE,

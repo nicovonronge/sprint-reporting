@@ -3,7 +3,7 @@ import type {
   JiraSearchResponse, JiraIssue, JiraField,
   JiraSprintListResponse, JiraSprint,
 } from '../types/jira.js';
-import { JIRA_FIELDS_TO_FETCH } from '../constants/workflow.js';
+import { JIRA_FIELDS_TO_FETCH, BUG_ISSUE_TYPE } from '../constants/workflow.js';
 
 export class JiraClient {
   private client: AxiosInstance;
@@ -54,6 +54,24 @@ export class JiraClient {
       issues.push(issue);
     }
     return issues;
+  }
+
+  /**
+   * Bugs created inside a window, whether or not they were ever put in a sprint. Used to find the
+   * bugs a person reported. JQL dates are in the Jira site's timezone, so the query is padded by a
+   * day each side and the exact window is applied here.
+   */
+  async searchBugsCreatedBetween(projectKey: string, startIso: string, endIso: string): Promise<JiraIssue[]> {
+    const day = 24 * 60 * 60 * 1000;
+    const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const startMs = Date.parse(startIso);
+    const endMs = Date.parse(endIso);
+    const jql = `project = ${projectKey} AND issuetype = "${BUG_ISSUE_TYPE}" AND created >= "${fmt(startMs - day)}" AND created <= "${fmt(endMs + 2 * day)}"`;
+    const issues = await this.searchAllIssues(jql);
+    return issues.filter(i => {
+      const created = Date.parse(i.fields.created);
+      return created >= startMs && created <= endMs;
+    });
   }
 
   async getSprintsForBoard(boardId: number): Promise<JiraSprint[]> {

@@ -10,15 +10,27 @@ import { calculateSprintMetrics, aggregateSprintMetrics } from '../services/metr
 import { applyFilters } from '../services/ticket-filter.js';
 import { buildComparisonReport } from '../services/comparison-report.js';
 import { buildSprintReportExport, buildComparisonExport } from '../services/export-builder.js';
+import { fetchReportedBugs } from '../services/sprint-fetcher.js';
 import { buildPeopleReport, listPeopleOptions } from '../services/people-report.js';
+import { buildPeopleBulkZip, buildPeopleReports, peopleSummaryCsv, buildSprintReportBulkZip } from '../services/bulk-export.js';
 import { getDataGuide, isGuideKind } from '../constants/data-guide.js';
-import type { PersonRole } from '../types/people-report.js';
+import type { PersonRole, PeoplePeriod } from '../types/people-report.js';
 import { SWIMLANE_ORDER, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
 import type { JiraSprint, JiraIssue } from '../types/jira.js';
 import type { GitHubPR } from '../types/github.js';
 import type { FilterOptions } from '../types/metrics.js';
 import * as log from '../utils/logger.js';
 import { getUiHtml } from './ui.js';
+
+/** Optional { from, to } in the request body; absent means "whole sprints". */
+function parsePeriod(raw: unknown): PeoplePeriod | undefined {
+  if (raw == null) return undefined;
+  const p = raw as Partial<PeoplePeriod>;
+  if (typeof p.from !== 'string' || typeof p.to !== 'string') {
+    throw new Error('period needs "from" and "to" dates (YYYY-MM-DD)');
+  }
+  return { from: p.from, to: p.to };
+}
 
 const TEAMS = [
   { key: 'SQM', name: 'Mavericks' },
@@ -116,15 +128,20 @@ export async function startWebUI(): Promise<void> {
           }
         }
 
+        const sprintStartDate = sprintInfo?.startDate ?? '';
+        const sprintEndDate = sprintInfo?.endDate ?? sprintInfo?.completeDate ?? '';
+        const reportedBugs = await fetchReportedBugs(jira, projectKey, sprintStartDate, sprintEndDate, allSprints, issues);
+
         const cached: CachedSprintData = {
           fetchedAt: new Date().toISOString(),
           projectKey,
           sprintName,
           sprintId: sprintInfo?.id ?? 0,
-          sprintStartDate: sprintInfo?.startDate ?? '',
-          sprintEndDate: sprintInfo?.endDate ?? sprintInfo?.completeDate ?? '',
+          sprintStartDate,
+          sprintEndDate,
           issues,
           githubData,
+          reportedBugs,
         };
         save(cached);
       }
@@ -236,29 +253,76 @@ export async function startWebUI(): Promise<void> {
 
   // API: People report step 1 — who can be reported on, and which chosen sprints aren't fetched yet
   app.post('/api/people/options', (req, res) => {
-    const { projectKey, sprintNames } = req.body;
+    const { projectKey, sprintNames, period } = req.body;
     if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0) {
       res.status(400).json({ error: 'projectKey and a non-empty sprintNames array are required' });
       return;
     }
 
     try {
-      res.json(listPeopleOptions(projectKey, sprintNames));
+      res.json(listPeopleOptions(projectKey, sprintNames, parsePeriod(period)));
     } catch (err: any) {
-      res.status(500).json({ error: err.message ?? String(err) });
+      res.status(400).json({ error: err.message ?? String(err) });
     }
   });
 
   // API: People report — one person, one role, combined across the chosen (fetched) sprints
   app.post('/api/people/report', (req, res) => {
-    const { projectKey, sprintNames, person, role } = req.body;
+    const { projectKey, sprintNames, person, role, period, previousPeriod } = req.body;
     if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0 || !person || (role !== 'dev' && role !== 'qa')) {
       res.status(400).json({ error: 'projectKey, sprintNames, person and role (dev|qa) are required' });
       return;
     }
 
     try {
-      res.json(buildPeopleReport(projectKey, sprintNames, person, role as PersonRole));
+      res.json(buildPeopleReport(projectKey, sprintNames, person, role as PersonRole, parsePeriod(period), parsePeriod(previousPeriod)));
+    } catch (err: any) {
+      res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: People report for several people at once. format: 'zip' (JSON per person + CSVs),
+  // 'csv' (one summary row per person) or 'json' (the reports, for the combined print page).
+  app.post('/api/people/report/bulk', (req, res) => {
+    const { projectKey, sprintNames, people, role, period, previousPeriod, format } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0 || (role !== 'dev' && role !== 'qa')
+      || !Array.isArray(people) || people.length === 0 || people.some((p: unknown) => typeof p !== 'string')) {
+      res.status(400).json({ error: 'projectKey, sprintNames, a non-empty people array and role (dev|qa) are required' });
+      return;
+    }
+    if (!['zip', 'csv', 'json'].includes(format)) {
+      res.status(400).json({ error: 'format must be zip, csv or json' });
+      return;
+    }
+
+    try {
+      const request = { projectKey, sprintNames, people, role: role as PersonRole, period: parsePeriod(period), previousPeriod: parsePeriod(previousPeriod) };
+      const stamp = new Date().toISOString().slice(0, 10);
+      const base = `people-reports_${projectKey}_${role}_${stamp}`;
+      if (format === 'zip') {
+        res.type('application/zip').attachment(`${base}.zip`).send(buildPeopleBulkZip(request));
+      } else if (format === 'csv') {
+        res.type('text/csv').attachment(`${base}.csv`).send(peopleSummaryCsv(buildPeopleReports(request).reports));
+      } else {
+        const { reports, skipped } = buildPeopleReports(request);
+        res.json({ reports: reports.map(({ dataGuide: _guide, ...rest }) => rest), skipped });
+      }
+    } catch (err: any) {
+      res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: ZIP of one JSON export per sprint plus a one-row-per-sprint CSV
+  app.post('/api/export/sprint-report/bulk', (req, res) => {
+    const { projectKey, sprintNames, filters } = req.body;
+    if (!projectKey || !Array.isArray(sprintNames) || sprintNames.length === 0) {
+      res.status(400).json({ error: 'projectKey and a non-empty sprintNames array are required' });
+      return;
+    }
+
+    try {
+      const zip = buildSprintReportBulkZip(projectKey, sprintNames, toFilterOptions(filters));
+      res.type('application/zip').attachment(`sprint-reports_${projectKey}_${new Date().toISOString().slice(0, 10)}.zip`).send(zip);
     } catch (err: any) {
       res.status(404).json({ error: err.message ?? String(err) });
     }

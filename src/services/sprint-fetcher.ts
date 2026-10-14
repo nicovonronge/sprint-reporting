@@ -17,6 +17,36 @@ interface FetchOptions {
   board?: string;
 }
 
+/**
+ * Bugs created while the sprint ran that are not in the sprint itself, so the people report can
+ * list the bugs a person reported even when the bug was never sprinted. A sprint with no start
+ * date (future) has nothing to look at. The window runs from the sprint start to the start of the
+ * next sprint, so bugs raised in the gap between two sprints are not lost.
+ */
+export async function fetchReportedBugs(
+  jira: JiraClient,
+  projectKey: string,
+  sprintStartDate: string,
+  sprintEndDate: string,
+  allSprints: JiraSprint[],
+  sprintIssues: JiraIssue[],
+): Promise<JiraIssue[]> {
+  if (!sprintStartDate) return [];
+  const startMs = Date.parse(sprintStartDate);
+  const nextStart = allSprints
+    .map(s => (s.startDate ? Date.parse(s.startDate) : NaN))
+    .filter(ms => ms > startMs)
+    .sort((a, b) => a - b)[0];
+  const windowEndMs = Math.min(
+    Date.now(),
+    nextStart ?? (sprintEndDate ? Date.parse(sprintEndDate) : Date.now()),
+  );
+  const end = new Date(Math.max(windowEndMs, startMs)).toISOString();
+  const inSprint = new Set(sprintIssues.map(i => i.key));
+  const bugs = await jira.searchBugsCreatedBetween(projectKey, sprintStartDate, end);
+  return bugs.filter(b => !inSprint.has(b.key));
+}
+
 export async function runFetch(options: FetchOptions): Promise<void> {
   const config = getConfig();
   const jira = new JiraClient(config.JIRA_BASE_URL, config.JIRA_EMAIL, config.JIRA_API_TOKEN);
@@ -100,15 +130,22 @@ async function fetchSprint(
     }
   }
 
+  const sprintStartDate = sprintInfo?.startDate ?? '';
+  const sprintEndDate = sprintInfo?.endDate ?? sprintInfo?.completeDate ?? '';
+  const bugSpinner = ora('Fetching bugs reported during the sprint...').start();
+  const reportedBugs = await fetchReportedBugs(jira, projectKey, sprintStartDate, sprintEndDate, allSprints, issues);
+  bugSpinner.succeed(`Fetched ${reportedBugs.length} more bug(s) created during the sprint (not in it)`);
+
   const cached: CachedSprintData = {
     fetchedAt: new Date().toISOString(),
     projectKey,
     sprintName,
     sprintId: sprintInfo?.id ?? 0,
-    sprintStartDate: sprintInfo?.startDate ?? '',
-    sprintEndDate: sprintInfo?.endDate ?? sprintInfo?.completeDate ?? '',
+    sprintStartDate,
+    sprintEndDate,
     issues,
     githubData,
+    reportedBugs,
   };
 
   save(cached);

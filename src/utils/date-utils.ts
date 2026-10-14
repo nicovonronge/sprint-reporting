@@ -39,31 +39,33 @@ export function isWithinRange(timestamp: string, start: string, end: string): bo
   return t >= new Date(start).getTime() && t <= new Date(end).getTime();
 }
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+
+export const WORKDAY_START_HOUR_UTC = 8;
+export const WORKDAY_END_HOUR_UTC = 17;
 
 /**
- * Milliseconds between two timestamps, excluding Saturdays and Sundays (UTC day boundaries).
+ * Milliseconds between two timestamps that fall inside working time: Monday–Friday,
+ * 08:00–17:00 UTC (9h per day). Weekends and out-of-hours time are not counted.
  */
 export function businessMsBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso).getTime();
   const end = new Date(endIso).getTime();
   if (end <= start) return 0;
 
-  let cursor = start;
   let total = 0;
+  const first = new Date(start);
+  let dayStart = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), first.getUTCDate());
 
-  while (cursor < end) {
-    const cursorDate = new Date(cursor);
-    const dayStart = Date.UTC(cursorDate.getUTCFullYear(), cursorDate.getUTCMonth(), cursorDate.getUTCDate());
-    const dayEnd = dayStart + MS_PER_DAY;
-    const segmentEnd = Math.min(end, dayEnd);
-    const dayOfWeek = cursorDate.getUTCDay();
-
+  while (dayStart < end) {
+    const dayOfWeek = new Date(dayStart).getUTCDay();
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      total += segmentEnd - cursor;
+      const windowStart = Math.max(start, dayStart + WORKDAY_START_HOUR_UTC * MS_PER_HOUR);
+      const windowEnd = Math.min(end, dayStart + WORKDAY_END_HOUR_UTC * MS_PER_HOUR);
+      if (windowEnd > windowStart) total += windowEnd - windowStart;
     }
-
-    cursor = dayEnd;
+    dayStart += MS_PER_DAY;
   }
 
   return total;

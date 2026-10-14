@@ -51,7 +51,7 @@ const COMMON_STEPS = [
   'Ticket data and full change history were downloaded from Jira for each sprint (and pull requests from GitHub when configured).',
   'Currently-escalated tickets, and Todo-only tickets whose sprints never started, were dropped.',
   'Status, assignee, points, components and similar fields were rebuilt from the change history as of the end of each sprint.',
-  'Cycles, time in lane and turnaround were counted only inside each sprint window, in business time (weekends excluded).',
+  'Cycles, time in lane and turnaround were counted only inside each sprint window, in business time (Mon-Fri, 08:00-17:00 UTC only; weekends and out-of-hours excluded).',
 ];
 
 function sprintInfo(projectKey: string, sprintNames: string[]): ExportGeneration['sprints'] {

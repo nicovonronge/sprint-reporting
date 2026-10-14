@@ -54,6 +54,9 @@ export interface TicketMetrics {
   createdDate: string;
   updatedDate: string | null;
   statusChangedDate: string | null;
+  resolvedDate: string | null;
+  parentKey: string | null;
+  parentSummary: string | null;
   reporter: string | null;
   creator: string | null;
   subtaskCount: number;
@@ -69,6 +72,8 @@ export interface TicketMetrics {
   // Sprint carry-over
   sprintCount: number;
   sprintNames: string[];
+  /** Every sprint the ticket has ever been in, with its state and start date (null if unplanned). */
+  sprintDetails: Array<{ name: string; state: string; startDate: string | null }>;
   carryOverCount: number;
 
   linkedDefects: number;
