@@ -5,6 +5,9 @@
   "projectBoards": {
     "PROJ": 1
   },
+  "teams": [
+    { "key": "PROJ", "name": "Team Name" }
+  ],
   "comparisonExcludedAssignees": [
     "Full Name One",
     "Full Name Two"

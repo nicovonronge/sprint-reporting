@@ -116,6 +116,45 @@ calculation, and don't "fix" the numbers back to raw wall-clock/status-transitio
 - Implemented in `src/services/people-report.ts`, served by `/api/people/options` and
   `/api/people/report`; the page has print styles and a JSON export.
 
+## Quarterly report
+
+- Web UI only: compares two periods ("previous" and "current", e.g. Q2 and Q3) for one team, for the
+  developers and QA testers the user ticks. Replaces the manual "export people reports, then build the
+  team cycling-time report" routine. Never mixes projects.
+- **Two modes, same for both periods:** whole sprints (each sprint marked Previous or Current) or two
+  non-overlapping date ranges. Each period can be named. Date-range mode takes tickets from the
+  Jira sprints overlapping each range (the UI offers to fetch missing ones; fetched overlapping sprints are
+  added server-side too). A sprint can't be in both periods.
+- Every figure comes from `buildPeopleReport`, once per person per role per period, so credit rules,
+  cycles (Dev = `QA Failed`, QA = `PO Review Failed`), lane time, turnaround, business-time rules and the
+  board baseline (dev: every ticket; QA: tickets with a QA assignee) are the people-report rules, unchanged.
+  The non-dev assignee exclusion does **not** apply; the user chooses who is a dev / QA tester (default
+  ticks: tickets in both periods). People with no tickets in a period are left out of that period.
+- **Time is business days of 9h** (`BUSINESS_DAY_MS`), never 24h days. CSV durations are business hours.
+- **Scoring** (`compareScope`, `verdictFor` in `src/services/quarterly-report.ts`): per measure, previous vs
+  current for Board, Developer average (plain average of the people) and QA board. Under 2% change = Same;
+  rates change in points, everything else in %. Tickets, story points and linked defects are Volume (not
+  scored). A rise from zero is Worse/Better, never Same. Verdict (whole board): Improved = at least 3 more
+  Better than Worse and neither cycles per ticket nor rework-free rate Worse; Not an overall improvement =
+  at least 3 more Worse than Better; otherwise Mixed. The AI never chooses the verdict.
+- **AI notes are optional** (`src/services/quarterly-notes.ts`, `POST /api/quarterly/notes`): the model writes
+  tokens like `[[cur:dev:Name:median_turnaround]]` and the numbers are filled in from the data; headline figures are tokens; ticket-level figures from the hints (lane days, defect counts, story points) may be quoted with the ticket key; a typed
+  figure or unknown token becomes a warning shown on the page. Ticket-level hints (cycle-heavy tickets, open
+  stories, longest waits) come from the current period's people reports.
+- **Per-person download for KPI / AI use** ("Per person (KPI ZIP)", `POST /api/quarterly/export/people`,
+  `buildQuarterlyPersonZip` in `src/services/quarterly-export.ts`): only the people ticked, one JSON per person
+  and role with previous and current side by side (`kpi` figures + change per measure for person and board, and the
+  full people report for each period), plus `index.json`, `kpi.csv`, `tickets.csv`. **No AI notes and no verdict** —
+  measured figures only. People with no tickets in either period are not exported. Built from the same people
+  reports as the quarterly report (`collectQuarterlyPeople`), so numbers match it.
+- Checks are listed on the page and in the export: small samples (<20 tickets), periods of very different
+  length (totals not like-for-like), zero cycles in both periods, left-out people.
+- Implemented in `src/services/quarterly-report.ts` (build, `assembleQuarterlyReport` is pure and tested),
+  `quarterly-notes.ts`, `quarterly-export.ts` (JSON `{ info, generation, data, notes }`, ZIP with
+  `report.json`/`compare.csv`/`people.csv`, comparison CSV), `/api/quarterly/{options,report,notes,export}`
+  and the page in `src/web/quarterly-ui.ts`. **When you change a rule above, update the data guide**
+  (`quarterly` kind in `src/constants/data-guide.ts`) and the notes prompt.
+
 ## Bulk downloads
 
 - **People report, several people at once** (`POST /api/people/report/bulk`, `src/services/bulk-export.ts`):
@@ -134,8 +173,9 @@ calculation, and don't "fix" the numbers back to raw wall-clock/status-transitio
 ## Team name
 
 - Every report and export names the team next to the Jira project key (e.g. Mavericks / SQM). The
-  list lives in `TEAMS` in `src/constants/workflow.ts` (`getTeamName`); a project not on the list has
-  `teamName: null` and shows only its key. Add new teams there.
+  list lives under `teams` in the gitignored `workflow.config.json` (loaded as `TEAMS` in
+  `src/constants/workflow.ts`, `getTeamName`); a project not on the list has `teamName: null` and
+  shows only its key. Add new teams there (dummy entry in `workflow.config.example.json`).
 - Shown in: sprint/comparison/people report headings (web, print, CLI, HTML report), the AI prompt, the
   `teamName` field of `SprintMetrics`, `ComparisonEntry`, `PeopleReport` and every export's `generation`,
   and a `team` column in the bulk CSVs (`summary.csv`, `tickets.csv`, `sprints.csv`).
@@ -174,5 +214,5 @@ pushed, in any branch or in history. Before every commit/push, check what is bei
   should show only placeholders. Check `git log --all` too — a secret removed in a later commit is
   still public. If one leaks, revoke/rotate it first, then rewrite history.
 - Don't use `git push --mirror`/`--all` (local-only refs such as `refs/t3/*` would be sent).
-- The team list in `TEAMS` (`src/constants/workflow.ts`) is accepted as non-sensitive; don't add
-  anything more revealing there.
+- The team list is org-specific, so it lives in `workflow.config.json` too (`teams`); the example
+  file holds a dummy entry only.
