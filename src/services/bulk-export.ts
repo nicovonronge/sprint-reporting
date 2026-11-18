@@ -94,7 +94,7 @@ export function toCsv(headers: string[], rows: Cell[][]): string {
 }
 
 /** Safe, unique file name part for a person or sprint. */
-function fileSafe(name: string, used: Set<string>): string {
+export function fileSafe(name: string, used: Set<string>): string {
   const base = name.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'unnamed';
   let candidate = base;
   for (let i = 2; used.has(candidate.toLowerCase()); i++) candidate = `${base}_${i}`;
@@ -183,22 +183,33 @@ export function peopleSummaryCsv(reports: PeopleReport[]): string {
   );
 }
 
-/** One row per (person, ticket) so tickets can be filtered and pivoted. */
-export function peopleTicketsCsv(reports: PeopleReport[]): string {
+/** Headers and rows of the per-ticket table. `extra` adds leading columns (for example a period) per report. */
+export function peopleTicketsTable(
+  reports: PeopleReport[],
+  extra?: { headers: string[]; values: (r: PeopleReport) => Cell[] },
+): { headers: string[]; rows: Cell[][] } {
   const laneNames = [...new Set(reports.flatMap(r => r.tickets.flatMap(t => Object.keys(t.laneTimesMs))))].sort();
   const headers = [
+    ...(extra?.headers ?? []),
     'person', 'role', 'team', 'ticket', 'summary', 'issue_type', 'credited_as', 'sprints', 'status_at_period_end', 'status_now',
     'created', 'resolved', 'completed', 'story_points', 'dev_story_points', 'qa_story_points', 'priority',
     'turnaround_business_hours', 'role_cycles', 'dev_cycles', 'qa_cycles', 'linked_defects', 'no_activity_in_period', 'next_pi',
     ...laneNames.map(l => `${l.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_business_hours`),
   ];
   const rows = reports.flatMap(r => r.tickets.map(t => [
+    ...(extra?.values(r) ?? []),
     r.person, r.role, r.teamName ?? '', t.key, t.summary, t.issueType, t.creditedAs.join('+'), t.sprints.join('; '), t.status, t.statusNow,
     dateOnly(t.created), dateOnly(t.resolved), t.completed, t.storyPoints, t.devStoryPoints, t.qaStoryPoints, t.priority,
     hours(t.turnaroundMs), r.role === 'dev' ? t.devCycles : t.qaCycles, t.devCycles, t.qaCycles, t.linkedDefects,
     t.noActivityInRange, t.nextPI,
     ...laneNames.map(l => hours(t.laneTimesMs[l])),
   ]));
+  return { headers, rows };
+}
+
+/** One row per (person, ticket) so tickets can be filtered and pivoted. */
+export function peopleTicketsCsv(reports: PeopleReport[]): string {
+  const { headers, rows } = peopleTicketsTable(reports);
   return toCsv(headers, rows);
 }
 

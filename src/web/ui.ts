@@ -1,4 +1,5 @@
 import { formatDuration } from '../utils/date-utils.js';
+import { QUARTERLY_CSS, QUARTERLY_STEPS_HTML, QUARTERLY_SCRIPT } from './quarterly-ui.js';
 
 export function getUiHtml(): string {
   return `<!DOCTYPE html>
@@ -150,9 +151,11 @@ export function getUiHtml(): string {
     .back-link { color: #3b82f6; cursor: pointer; font-size: 0.9rem; margin-bottom: 1rem; display: inline-block; }
     .back-link:hover { text-decoration: underline; }
 
-    .compare-entry { text-align: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #1e293b; }
-    .compare-entry a { color: #3b82f6; cursor: pointer; font-size: 0.9rem; }
+    .entry-links { margin-bottom: 1.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #1e293b; }
+    .compare-entry { text-align: left; margin-bottom: 1rem; }
+    .compare-entry a { color: #3b82f6; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
     .compare-entry a:hover { text-decoration: underline; }
+    .compare-entry .entry-desc { margin: 0.2rem 0 0 1.6rem; color: #64748b; font-size: 0.8rem; line-height: 1.4; }
     .hint { color: #64748b; font-size: 0.8rem; margin-top: 0.5rem; }
 
     .people-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
@@ -191,6 +194,7 @@ export function getUiHtml(): string {
     .info-panel li { margin-bottom: 0.35rem; }
     .info-panel .field-name { font-family: monospace; color: #93c5fd; }
 
+${QUARTERLY_CSS}
     @media print {
       body { background: #fff; color: #111; }
       .container { max-width: none; padding: 0; }
@@ -231,14 +235,22 @@ export function getUiHtml(): string {
     <div class="wizard" id="wizard">
       <!-- Step 1: Team -->
       <div class="step active" id="step-team">
+        <div class="entry-links">
+          <div class="compare-entry">
+            <a id="compare-entry-link" onclick="toggleCompareFlow()">&#128200; Sprint Comparison Report</a>
+            <p class="entry-desc">Trend charts across several sprints you've already downloaded, for one team. Shows whether time in each swimlane and ticket turnaround are going up or down. Leads, PMs and unassigned tickets are left out so the trends reflect dev capacity.</p>
+          </div>
+          <div class="compare-entry">
+            <a id="people-entry-link" onclick="togglePeopleFlow()">&#128100; People Report</a>
+            <p class="entry-desc">A performance/KPI report for one developer or QA tester across the sprints (or date range) you pick. Shows their tickets, rework cycles, lane time and turnaround next to the team baseline.</p>
+          </div>
+          <div class="compare-entry">
+            <a id="quarterly-entry-link" onclick="toggleQuarterlyFlow()">&#128197; Quarterly Report</a>
+            <p class="entry-desc">Compares two periods (e.g. Q2 vs Q3) for the whole team, for the developers and QA testers you tick. Scores each measure as Better, Worse or Same, gives an overall verdict, and exports per-person KPI files.</p>
+          </div>
+        </div>
         <div class="step-label" id="step-team-label">Step 1 of 4 — Select Team</div>
         <div class="option-grid" id="team-grid"></div>
-        <div class="compare-entry">
-          <a id="compare-entry-link" onclick="toggleCompareFlow()">&#128200; Sprint Comparison Report — compare trends across sprints you've already downloaded</a>
-        </div>
-        <div class="compare-entry" style="margin-top:0.75rem;padding-top:0.75rem">
-          <a id="people-entry-link" onclick="togglePeopleFlow()">&#128100; People Report — review how one person did across several sprints</a>
-        </div>
       </div>
 
       <!-- Step 2: Sprint -->
@@ -327,6 +339,7 @@ export function getUiHtml(): string {
         </div>
       </div>
 
+${QUARTERLY_STEPS_HTML}
       <!-- Step 3: Action -->
       <div class="step" id="step-action">
         <div class="step-label">Step 3 of 4 — What would you like to do?</div>
@@ -530,6 +543,9 @@ export function getUiHtml(): string {
       } else if (state.flow === 'people') {
         goStep('step-people-sprints');
         loadPeopleSprints(key);
+      } else if (state.flow === 'quarterly') {
+        goStep('step-quarterly-setup');
+        loadQuarterlySprints(key);
       } else {
         goStep('step-sprint');
         loadSprints(key);
@@ -552,18 +568,27 @@ export function getUiHtml(): string {
       const label = document.getElementById('step-team-label');
       const link = document.getElementById('compare-entry-link');
       const peopleLink = document.getElementById('people-entry-link');
-      link.parentElement.style.display = state.flow === 'people' ? 'none' : '';
-      peopleLink.parentElement.style.display = state.flow === 'compare' ? 'none' : '';
+      const quarterlyLink = document.getElementById('quarterly-entry-link');
+      link.parentElement.style.display = state.flow === 'people' || state.flow === 'quarterly' ? 'none' : '';
+      peopleLink.parentElement.style.display = state.flow === 'compare' || state.flow === 'quarterly' ? 'none' : '';
+      quarterlyLink.parentElement.style.display = state.flow === 'compare' || state.flow === 'people' ? 'none' : '';
+      for (const a of [link, peopleLink, quarterlyLink]) {
+        a.nextElementSibling.style.display = state.flow === 'wizard' ? '' : 'none';
+      }
       if (state.flow === 'compare') {
         label.textContent = 'Sprint Comparison Report — Select a Team';
         link.textContent = "✕ Cancel comparison mode (back to normal report)";
       } else if (state.flow === 'people') {
         label.textContent = 'People Report — Select a Team';
         peopleLink.textContent = "✕ Cancel people report (back to normal report)";
+      } else if (state.flow === 'quarterly') {
+        label.textContent = 'Quarterly Report — Select a Team';
+        quarterlyLink.textContent = "✕ Cancel quarterly report (back to normal report)";
       } else {
         label.textContent = 'Step 1 of 4 — Select Team';
-        link.textContent = "📈 Sprint Comparison Report — compare trends across sprints you've already downloaded";
-        peopleLink.textContent = "👤 People Report — review how one person did across several sprints";
+        link.textContent = "📈 Sprint Comparison Report";
+        peopleLink.textContent = "👤 People Report";
+        quarterlyLink.textContent = "📅 Quarterly Report";
       }
     }
 
@@ -1129,6 +1154,7 @@ export function getUiHtml(): string {
     function resultsReturnStep() {
       if (state.flow === 'compare') return 'step-compare-sprints';
       if (state.flow === 'people') return 'step-people-person';
+      if (state.flow === 'quarterly') return 'step-quarterly-people';
       return state.action === 'fetch' ? 'step-action' : 'step-filters';
     }
 
@@ -1231,6 +1257,8 @@ export function getUiHtml(): string {
 
     function reset() {
       state = { team: null, sprints: [], action: null, flow: 'wizard', compareSprints: [], peopleSprints: [], peopleOptions: null, peopleReport: null, infoKind: 'general', exportRequest: null, appConfig: state.appConfig };
+      qDestroyCharts();
+      qState = qFresh();
       updateCompareEntryUI();
       document.getElementById('info-panel').classList.remove('open');
       document.getElementById('info-btn').classList.remove('open');
@@ -1736,6 +1764,7 @@ export function getUiHtml(): string {
       if (!str) return '';
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
+${QUARTERLY_SCRIPT}
   </script>
 </body>
 </html>`;

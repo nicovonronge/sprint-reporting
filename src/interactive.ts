@@ -5,6 +5,7 @@ import { getConfig, hasGitHubToken, hasClaudeToken } from './config.js';
 import { JiraClient } from './clients/jira-client.js';
 import { PROJECT_BOARDS, PROJECT_REPOS, TEAMS } from './constants/workflow.js';
 import type { JiraSprint } from './types/jira.js';
+import { recentClosedSprints } from './services/sprint-list.js';
 import * as log from './utils/logger.js';
 
 export async function runInteractive(): Promise<void> {
@@ -44,9 +45,7 @@ export async function runInteractive(): Promise<void> {
 
   // Show recent sprints (active + last few closed + future), most recent first
   const activeSprints = sprints.filter(s => s.state === 'active');
-  const closedSprints = sprints.filter(s => s.state === 'closed')
-    .sort((a, b) => new Date(b.completeDate ?? b.endDate ?? '').getTime() - new Date(a.completeDate ?? a.endDate ?? '').getTime())
-    .slice(0, 10);
+  const closedSprints = recentClosedSprints(sprints);
   const futureSprints = sprints.filter(s => s.state === 'future');
 
   const sprintChoices = [

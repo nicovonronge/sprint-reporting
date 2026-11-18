@@ -11,7 +11,7 @@ import {
  * knows how they were produced. Keep this in step with the rules in CLAUDE.md.
  */
 
-export type GuideKind = 'general' | 'sprint' | 'comparison' | 'people';
+export type GuideKind = 'general' | 'sprint' | 'comparison' | 'people' | 'quarterly';
 
 export interface GuideSection {
   title: string;
@@ -228,6 +228,98 @@ const PEOPLE: GuideSection[] = [
   },
 ];
 
+const QUARTERLY: GuideSection[] = [
+  {
+    title: 'What the quarterly report is',
+    points: [
+      'It compares two periods of the same team, "previous" and "current" (for example Q2 and Q3), for the developers and QA testers you choose. The report names the team that owns the project.',
+      'You can define the periods as sets of whole sprints, or as two date ranges. You can give each period a name. Both periods use the same mode.',
+      'Each person is reported on in each period exactly as in the people report: same credit rules (assignee or QA assignee at the end of the period), same cycle and lane rules, same business-time rules. Nothing is re-measured.',
+      'A person with no tickets in a period is left out of that period\'s figures and averages, and a note says so.',
+    ],
+  },
+  {
+    title: 'The three groups of figures',
+    points: [
+      'Developers and QA: one figure per person per measure, the plain average of the people\'s figures, and the board for context.',
+      'Board (developers) = every ticket in the same sprints or dates. QA board = every ticket with a QA assignee. They are not the same set of tickets, so developer and QA figures overlap but differ.',
+      'Developer average = the plain average of the chosen developers\' own figures (not the board). People with no value for a measure (for example no finished tickets, so no turnaround) are left out of that average.',
+    ],
+  },
+  {
+    title: 'Time in the quarterly report',
+    points: [
+      'Times are business days: working time only (Mon-Fri 08:00-17:00 UTC), and a business day is 9 hours, not 24. This is the same time as everywhere else in the tool, only shown in days.',
+      'In CSV files the same times are given in business hours (days times 9).',
+    ],
+  },
+  {
+    title: 'Better, worse and the verdict',
+    points: [
+      'Each measure is compared previous against current. For rates (completion, rework-free) the change is in percentage points; for everything else it is the percent change.',
+      'A change of less than 2% is "Same". Otherwise it is Better or Worse depending on the measure: lower is better for times, cycles and defects per ticket; higher is better for completed tickets and points, completion rates and the rework-free rate.',
+      'Tickets, story points and linked defects are volume: they show how much work there was and are not scored ("Volume").',
+      'The verdict looks at the whole board (QA board if no developers were chosen). "Improved" = at least 3 more Better than Worse measures and neither cycles per ticket nor the rework-free rate got worse. "Not an overall improvement" = at least 3 more Worse than Better. Anything else is "Mixed".',
+    ],
+  },
+  {
+    title: 'People in both periods',
+    points: [
+      'The per-person comparison only shows people with a report in both periods. Someone who joined or left is listed under "onlyInCurrent" / "onlyInPrevious".',
+      '"sameDevelopers" adds up tickets, completed tickets, completed story points and dev cycles for just the people who were in both periods, so a change in team size does not hide or inflate the result.',
+    ],
+  },
+  {
+    title: 'Things to keep in mind',
+    points: [
+      'If the two periods are of different length, totals (tickets, completed points) are not like-for-like. Rates, medians and per-ticket figures are. The report says when this is the case ("checks").',
+      'People with fewer than 20 tickets are a small sample. Look at their medians rather than their averages.',
+      'Linked defects are lifetime counts, so tickets from an older period have had longer to collect them.',
+      'Turnaround includes time waiting in PO Review, which neither developers nor QA control.',
+    ],
+  },
+  {
+    title: 'AI notes',
+    points: [
+      'The written notes ("What stands out") are optional and written by Claude from the report data. The model does not type figures: they are filled in from the data, so they match the tables. If it did type a figure, the notes carry a warning.',
+      'The verdict label itself is never chosen by the AI; it follows the rule above.',
+    ],
+  },
+  {
+    title: 'Downloads',
+    points: [
+      'Export JSON: { info, generation, data, notes }. "info" is this guide and the field list, "generation" records the periods, people, filters and steps followed, "data" is the report and "notes" the AI notes (null if none were written).',
+      'ZIP: report.json (the same file), compare.csv (one row per scope and measure: previous, current, change, result) and people.csv (one row per person, average and board, per period and role).',
+      'Every CSV row has team (the team name) and project (the Jira project key) columns.',
+      'Per person (KPI ZIP): for the people you chose, one file per person and role with the previous and current period side by side, meant for KPI scoring by a person or an AI system. No AI notes and no team verdict are included. Contains index.json (guides, periods, file list), kpi.csv (one row per person, role, period and group "person" or "board", every measure), tickets.csv (one row per person, period and ticket) and people/<name>_<role>.json.',
+      'Each people/<name>_<role>.json holds "kpi" (previous and current figures for the person and the board, plus the change and Better / Worse / Same result per measure, for the person and for the board), "measures" (the measure list), and the full people report for "previous" and "current". In "kpi", times are business days and rates are fractions; the full people reports keep milliseconds of business time. In the CSV files times are business hours and rates are whole percentages. People with no tickets in either period are not exported (listed under "notExported" in index.json).',
+    ],
+  },
+];
+
+const QUARTERLY_FIELDS: Record<string, string> = {
+  projectKey: 'Jira project the report is for.',
+  teamName: 'Name of the team that owns the project. Null if the project is not on the tool\'s team list.',
+  mode: '"sprints" = each period is a set of whole sprints. "dateRange" = each period is a date range.',
+  previous: 'The earlier period: label, description, period (dates, or null), sprints used and days covered. current is the same for the later period.',
+  dev: 'Developer figures: measures (the measure list), previous and current. Null if no developers were chosen. qa is the same for QA testers.',
+  'dev.measures': 'Every measure with id, section (Throughput, Speed, Quality), label, unit (count, pct, days, ratio) and better (higher, lower, neutral = volume, not scored).',
+  'dev.current.people': 'One entry per developer with tickets in the period: person, tickets and values (measure id to number).',
+  'dev.current.average': 'Plain average of the people\'s values, measure by measure.',
+  'dev.current.board': 'The same measures for every ticket in the same sprints or dates. boardTickets is how many tickets that is.',
+  'values (time)': 'Times are business days (9 hours per day). Rates (pct) are fractions from 0 to 1. Null means not available.',
+  comparison: 'The scoring of previous against current. See below.',
+  'comparison.rows': 'One row per scope (board, devAverage, qaBoard) and measure: previous, current, change, changeKind (pts = percentage points as a fraction, pct = relative change as a fraction) and result (Better, Worse, Same, Volume, No data).',
+  'comparison.summary': 'Per scope, how many scored measures got better, worse or stayed the same.',
+  'comparison.verdict': 'Improved, Mixed or Not an overall improvement, by the rule in the guide. boardBetter, boardWorse and boardScored are the counts behind it.',
+  'comparison.people': 'Key measures for each person with a report in both periods (previous, current).',
+  'comparison.onlyInCurrent': 'People with a report only in the current period. onlyInPrevious: only in the previous period.',
+  'comparison.sameDevelopers': 'Totals (tickets, completed, completed story points, dev cycles) for developers who were in both periods, for previous and current.',
+  hints: 'Ticket-level facts for each person in the current period (tickets carrying cycles, open tickets with points, most linked defects, longest time in own lane, longest waits). Times in business days.',
+  checks: 'Things to keep in mind when reading the report (small samples, different period lengths, left-out people).',
+  notes: 'AI-written notes: verdict, teamChange and a note per person ("dev:Name" / "qa:Name"). warnings lists any problems found in the AI text. Null in the export if no notes were written.',
+};
+
 const PEOPLE_FIELDS: Record<string, string> = {
   projectKey: 'Jira project the report is for.',
   teamName: 'Name of the team that owns the project (for example Mavericks for SQM). Null if the project is not on the tool\'s team list. Not to be confused with "team" below, which is the comparison baseline.',
@@ -395,6 +487,12 @@ const GUIDES: Record<GuideKind, Omit<DataGuide, 'kind'>> = {
     intro: 'A review of one person in one role across the sprints you chose.',
     sections: [...PEOPLE, ...SPRINT, ...GENERAL],
     fields: PEOPLE_FIELDS,
+  },
+  quarterly: {
+    title: 'About the quarterly report',
+    intro: 'A comparison of two periods for the same team, with the developers and QA testers you chose.',
+    sections: [...QUARTERLY, ...GENERAL],
+    fields: QUARTERLY_FIELDS,
   },
 };
 

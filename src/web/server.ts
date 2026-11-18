@@ -11,9 +11,13 @@ import { applyFilters } from '../services/ticket-filter.js';
 import { buildComparisonReport } from '../services/comparison-report.js';
 import { buildSprintReportExport, buildComparisonExport } from '../services/export-builder.js';
 import { fetchReportedBugs } from '../services/sprint-fetcher.js';
+import { recentClosedSprints } from '../services/sprint-list.js';
 import { buildPeopleReport, listPeopleOptions } from '../services/people-report.js';
 import { buildPeopleBulkZip, buildPeopleReports, peopleSummaryCsv, buildSprintReportBulkZip } from '../services/bulk-export.js';
+import { buildQuarterlyReport, listQuarterlyOptions } from '../services/quarterly-report.js';
+import { buildQuarterlyExport, buildQuarterlyPersonZip, buildQuarterlyZip, quarterlyCompareCsv } from '../services/quarterly-export.js';
 import { getDataGuide, isGuideKind } from '../constants/data-guide.js';
+import type { QuarterlyNotes, QuarterlyRequest } from '../types/quarterly-report.js';
 import type { PersonRole, PeoplePeriod } from '../types/people-report.js';
 import { SWIMLANE_ORDER, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
 import type { JiraSprint, JiraIssue } from '../types/jira.js';
@@ -77,9 +81,7 @@ export async function startWebUI(): Promise<void> {
     try {
       const sprints = await jira.getSprintsForBoard(boardId);
       const active = sprints.filter(s => s.state === 'active');
-      const closed = sprints.filter(s => s.state === 'closed')
-        .sort((a, b) => new Date(b.completeDate ?? b.endDate ?? '').getTime() - new Date(a.completeDate ?? a.endDate ?? '').getTime())
-        .slice(0, 10);
+      const closed = recentClosedSprints(sprints);
       const future = sprints.filter(s => s.state === 'future');
 
       const cachedByName = new Map(
@@ -301,6 +303,86 @@ export async function startWebUI(): Promise<void> {
       }
     } catch (err: any) {
       res.status(404).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // Quarterly report: two periods (sprints or date ranges) of one team, same people in each.
+  const parseQuarterlyRequest = (body: any): QuarterlyRequest => {
+    const spec = (raw: any) => ({
+      label: typeof raw?.label === 'string' ? raw.label : undefined,
+      sprintNames: Array.isArray(raw?.sprintNames) ? raw.sprintNames.filter((n: unknown) => typeof n === 'string') : [],
+      period: parsePeriod(raw?.period),
+    });
+    const names = (raw: unknown) => Array.isArray(raw) ? raw.filter((n): n is string => typeof n === 'string') : [];
+    return {
+      projectKey: String(body?.projectKey ?? ''),
+      mode: body?.mode,
+      previous: spec(body?.previous),
+      current: spec(body?.current),
+      developers: names(body?.developers),
+      qaTesters: names(body?.qaTesters),
+    };
+  };
+
+  // API: Quarterly report step 1 — who can be reported on, and which chosen sprints aren't fetched yet
+  app.post('/api/quarterly/options', (req, res) => {
+    try {
+      res.json(listQuarterlyOptions(parseQuarterlyRequest(req.body)));
+    } catch (err: any) {
+      res.status(400).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: Quarterly report
+  app.post('/api/quarterly/report', (req, res) => {
+    try {
+      res.json(buildQuarterlyReport(parseQuarterlyRequest(req.body)));
+    } catch (err: any) {
+      res.status(/No cached data|No fetched sprints/.test(err.message ?? '') ? 404 : 400).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: Quarterly report, AI-written notes (figures are filled in from the data, not typed by the model)
+  app.post('/api/quarterly/notes', async (req, res) => {
+    if (!hasClaudeToken(config)) {
+      res.status(400).json({ error: 'AI notes are not configured. Set CLAUDE_CODE_OAUTH_TOKEN to enable them.' });
+      return;
+    }
+    try {
+      const report = buildQuarterlyReport(parseQuarterlyRequest(req.body));
+      const { generateQuarterlyNotes } = await import('../services/quarterly-notes.js');
+      res.json(await generateQuarterlyNotes(report, req.body?.model ?? 'claude-sonnet-5'));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: Quarterly report download. format: 'json' (info + generation + data + notes), 'zip' (that plus CSVs) or 'csv' (comparison only).
+  app.post('/api/quarterly/export', (req, res) => {
+    const format = req.body?.format;
+    if (!['json', 'zip', 'csv'].includes(format)) {
+      res.status(400).json({ error: 'format must be json, zip or csv' });
+      return;
+    }
+    try {
+      const report = buildQuarterlyReport(parseQuarterlyRequest(req.body));
+      const notes = (req.body?.notes ?? null) as QuarterlyNotes | null;
+      const base = `quarterly-report_${report.projectKey}_${new Date().toISOString().slice(0, 10)}`;
+      if (format === 'json') res.json(buildQuarterlyExport(report, notes));
+      else if (format === 'zip') res.type('application/zip').attachment(`${base}.zip`).send(buildQuarterlyZip(report, notes));
+      else res.type('text/csv').attachment(`${base}.csv`).send(quarterlyCompareCsv(report));
+    } catch (err: any) {
+      res.status(400).json({ error: err.message ?? String(err) });
+    }
+  });
+
+  // API: Quarterly report, one file per selected person and role (previous and current side by side), as a ZIP for KPI / AI use. No AI notes.
+  app.post('/api/quarterly/export/people', (req, res) => {
+    try {
+      const request = parseQuarterlyRequest(req.body);
+      res.type('application/zip').attachment(`quarterly-people_${request.projectKey}_${new Date().toISOString().slice(0, 10)}.zip`).send(buildQuarterlyPersonZip(request));
+    } catch (err: any) {
+      res.status(/No cached data|No fetched sprints/.test(err.message ?? '') ? 404 : 400).json({ error: err.message ?? String(err) });
     }
   });
 

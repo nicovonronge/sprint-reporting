@@ -43,6 +43,7 @@ export const CUSTOM_FIELDS = {
 interface WorkflowConfig {
   projectRepos: Record<string, string[]>;
   projectBoards: Record<string, number>;
+  teams: { key: string; name: string }[];
   comparisonExcludedAssignees: string[];
 }
 
@@ -50,7 +51,7 @@ interface WorkflowConfig {
 // which is gitignored so this stays safe to publish. See workflow.config.example.json for
 // the expected shape. Falls back to empty config if the file isn't present.
 function loadWorkflowConfig(): WorkflowConfig {
-  const defaults: WorkflowConfig = { projectRepos: {}, projectBoards: {}, comparisonExcludedAssignees: [] };
+  const defaults: WorkflowConfig = { projectRepos: {}, projectBoards: {}, teams: [], comparisonExcludedAssignees: [] };
   try {
     const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../workflow.config.json'), 'utf-8');
     return { ...defaults, ...JSON.parse(raw) };
@@ -65,14 +66,9 @@ export const PROJECT_REPOS: Record<string, string[]> = workflowConfig.projectRep
 
 export const PROJECT_BOARDS: Record<string, number> = workflowConfig.projectBoards;
 
-// Teams, keyed by Jira project key. Used by the team picker and shown on every report/export.
-export const TEAMS: { key: string; name: string }[] = [
-  { key: 'SQM', name: 'Mavericks' },
-  { key: 'IFRS', name: 'Black Knights' },
-  { key: 'AUD', name: 'A-Team' },
-  { key: 'TAN', name: 'Titans' },
-  { key: 'GM', name: 'Green Mambas' },
-];
+// Teams, keyed by Jira project key (from workflow.config.json). Used by the team picker and
+// shown on every report/export.
+export const TEAMS: { key: string; name: string }[] = workflowConfig.teams;
 
 /** Team name for a Jira project key, or null for a project that isn't in TEAMS. */
 export function getTeamName(projectKey: string): string | null {
