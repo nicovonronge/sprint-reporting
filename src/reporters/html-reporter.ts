@@ -67,7 +67,7 @@ function generateHtml(m: SprintMetrics): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sprint Report: ${m.sprintName} (${m.projectKey})</title>
+  <title>Sprint Report: ${m.sprintName} (${m.teamName ? `${m.teamName}, ${m.projectKey}` : m.projectKey})</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -115,7 +115,7 @@ function generateHtml(m: SprintMetrics): string {
 </head>
 <body>
   <h1>Sprint Report: ${m.sprintName}</h1>
-  <p class="meta">Project: ${m.projectKey} | ${m.sprintStartDate ? new Date(m.sprintStartDate).toLocaleDateString() : '?'} — ${m.sprintEndDate ? new Date(m.sprintEndDate).toLocaleDateString() : '?'} | Generated: ${new Date().toLocaleDateString()}</p>
+  <p class="meta">${m.teamName ? `Team: ${m.teamName} | ` : ''}Project: ${m.projectKey} | ${m.sprintStartDate ? new Date(m.sprintStartDate).toLocaleDateString() : '?'} — ${m.sprintEndDate ? new Date(m.sprintEndDate).toLocaleDateString() : '?'} | Generated: ${new Date().toLocaleDateString()}</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Total Tickets</div><div class="value">${m.totalTickets}</div></div>

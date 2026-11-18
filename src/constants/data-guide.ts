@@ -48,6 +48,7 @@ const GENERAL: GuideSection[] = [
     points: [
       'Ticket data and history come from Jira. Pull request times come from GitHub (only if GitHub is set up).',
       'Everything is read from the data already downloaded ("fetched") for each sprint. Re-fetch a sprint to refresh it.',
+      'Each report and export names the team (for example Mavericks) next to its Jira project key (SQM). The name comes from a fixed list kept in the tool, one team per Jira project; a project that is not on the list shows only its key.',
       'Status, assignee, components, points and so on are rebuilt from the ticket\'s change history, so we can say what a ticket looked like at any moment.',
     ],
   },
@@ -133,7 +134,7 @@ const COMPARISON: GuideSection[] = [
   {
     title: 'Sprint comparison report',
     points: [
-      'Shows trends across several sprints you have already downloaded, for one team.',
+      'Shows trends across several sprints you have already downloaded, for one team. The team name is shown in the report heading.',
       'It uses the same sprint-period numbers described above.',
       'Tickets with no assignee, or whose assignee is on the fixed non-dev list (leads, PMs, QA leads), are left out. This is so admin, refinement and escalation tickets do not distort the trend of dev capacity.',
       'Only the main assignee is checked, never the QA assignee. A ticket tested by someone on the list still counts.',
@@ -146,7 +147,7 @@ const PEOPLE: GuideSection[] = [
   {
     title: 'What the people report is',
     points: [
-      'It combines several sprints into one review of a single person in a single role (Developer or QA) on a single project.',
+      'It combines several sprints into one review of a single person in a single role (Developer or QA) on a single project. The report names the team that owns that project.',
       'You choose the sprints. They normally match a KPI season.',
       'It is built from each sprint\'s sprint-period numbers, so nothing is counted twice when a ticket spans sprints.',
     ],
@@ -209,6 +210,7 @@ const PEOPLE: GuideSection[] = [
     points: [
       'The people report can be downloaded for several people at once (same role, sprints and dates). Each person is reported exactly as in the single report, so numbers match.',
       'ZIP contains: index.json (this guide, what was generated and which files exist), summary.csv (one row per person), tickets.csv (one row per person and ticket) and people/<name>.json (the full report for each person, without repeating this guide).',
+      'Every CSV row has team (the team name) and project (the Jira project key) columns, so files for different teams can be combined and still told apart. Note that "team" in the summary figures (team_tickets, _vs_team_pct) means the baseline of everyone in the same sprints, not the team name.',
       'The CSV files use business hours (Mon-Fri 08:00-17:00 UTC; a business day is 9 hours), not milliseconds. Columns ending _vs_team_pct are (person - team) / team as a whole percentage; lower is better for turnaround and cycles. Empty cells mean "not available" (for example no finished tickets, so no turnaround).',
       'summary.csv also has avg_<lane>_business_hours columns: the average time in each lane for the tickets that spent time there. Ticket summaries beginning with = + - or @ are prefixed with an apostrophe so spreadsheets do not read them as formulas.',
       'The combined print pack shows every selected person\'s report on one page, one person per printed page, ready for Print / Save as PDF.',
@@ -228,6 +230,7 @@ const PEOPLE: GuideSection[] = [
 
 const PEOPLE_FIELDS: Record<string, string> = {
   projectKey: 'Jira project the report is for.',
+  teamName: 'Name of the team that owns the project (for example Mavericks for SQM). Null if the project is not on the tool\'s team list. Not to be confused with "team" below, which is the comparison baseline.',
   person: 'The person being reviewed.',
   accountId: 'The person\'s Jira account id, taken from any fetched ticket that names them. Null if not found.',
   previousPeriod: 'Only in dateRange mode when a previous range was given: the same person measured over that range (period, sprintsUsed, summary, team). Summary and team are null if no fetched sprint overlaps it.',
@@ -304,6 +307,7 @@ const SPRINT_FIELDS: Record<string, string> = {
   sprintStartDate: 'When the sprint started.',
   sprintEndDate: 'When the sprint ended (or is planned to end).',
   projectKey: 'Jira project (team) key.',
+  teamName: 'Name of the team that owns the project (for example Mavericks for SQM). Null if the project is not on the tool\'s team list.',
   totalTickets: 'Tickets in the report after the rules above were applied.',
   completedTickets: 'Tickets whose status at the END of the sprint was in the Done lane.',
   newTickets: 'Tickets that were only ever in this one sprint.',
@@ -358,6 +362,7 @@ const COMPARISON_FIELDS: Record<string, string> = {
   swimlaneOrder: 'Lane names in workflow order (Escalated is never included).',
   entries: 'One entry per sprint, oldest first.',
   'entries[].projectKey': 'Jira project key.',
+  'entries[].teamName': 'Name of the team that owns the project. Null if the project is not on the tool\'s team list.',
   'entries[].sprintName': 'Sprint name.',
   'entries[].sprintStartDate': 'Sprint start.',
   'entries[].sprintEndDate': 'Sprint end.',

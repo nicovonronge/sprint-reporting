@@ -153,6 +153,8 @@ export interface PeopleIssueTypeEntry {
  */
 export interface PeopleReport {
   projectKey: string;
+  /** Team that owns the project; null if the project isn't in TEAMS. */
+  teamName: string | null;
   person: string;
   /** The person's Jira account id, when it appears on any fetched ticket. */
   accountId: string | null;

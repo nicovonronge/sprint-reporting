@@ -65,6 +65,20 @@ export const PROJECT_REPOS: Record<string, string[]> = workflowConfig.projectRep
 
 export const PROJECT_BOARDS: Record<string, number> = workflowConfig.projectBoards;
 
+// Teams, keyed by Jira project key. Used by the team picker and shown on every report/export.
+export const TEAMS: { key: string; name: string }[] = [
+  { key: 'SQM', name: 'Mavericks' },
+  { key: 'IFRS', name: 'Black Knights' },
+  { key: 'AUD', name: 'A-Team' },
+  { key: 'TAN', name: 'Titans' },
+  { key: 'GM', name: 'Green Mambas' },
+];
+
+/** Team name for a Jira project key, or null for a project that isn't in TEAMS. */
+export function getTeamName(projectKey: string): string | null {
+  return TEAMS.find(t => t.key === projectKey.toUpperCase())?.name ?? null;
+}
+
 // Sprint Comparison Report only: these people hold tickets (leads/PMs/QA leads) but aren't
 // doing dev work, so their tickets would skew swimlane/turnaround trends. Matched against the
 // primary assignee only, never the QA assignee. See CLAUDE.md for the full rule.

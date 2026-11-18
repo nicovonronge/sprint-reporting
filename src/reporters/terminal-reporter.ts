@@ -15,7 +15,7 @@ export function renderTerminalReport(metrics: SprintMetrics): void {
 }
 
 function renderSprintSummary(m: SprintMetrics): void {
-  log.heading(`Sprint: ${m.sprintName} (${m.projectKey})`);
+  log.heading(`Sprint: ${m.sprintName} (${m.teamName ? `${m.teamName}, ${m.projectKey}` : m.projectKey})`);
 
   const table = new Table({ style: { head: ['cyan'] } });
 

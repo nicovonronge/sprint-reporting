@@ -1,7 +1,7 @@
 import { load } from '../cache/cache-manager.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from './metrics-calculator.js';
 import { excludeNonDevAssignees } from './ticket-filter.js';
-import { STATUS_TO_SWIMLANE, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
+import { STATUS_TO_SWIMLANE, EXCLUDED_SWIMLANE, getTeamName } from '../constants/workflow.js';
 import type { SprintMetrics } from '../types/metrics.js';
 
 export interface SprintSelection {
@@ -11,6 +11,7 @@ export interface SprintSelection {
 
 export interface ComparisonEntry {
   projectKey: string;
+  teamName: string | null;
   sprintName: string;
   sprintStartDate: string;
   sprintEndDate: string;
@@ -42,6 +43,7 @@ export function buildComparisonReport(selections: SprintSelection[]): Comparison
 
     return {
       projectKey,
+      teamName: getTeamName(projectKey),
       sprintName,
       sprintStartDate: cached.sprintStartDate,
       sprintEndDate: cached.sprintEndDate,

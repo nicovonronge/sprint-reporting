@@ -1,5 +1,6 @@
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { getDataGuide } from '../constants/data-guide.js';
+import { getTeamName } from '../constants/workflow.js';
 import { load } from '../cache/cache-manager.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from './metrics-calculator.js';
 import { applyFilters } from './ticket-filter.js';
@@ -149,7 +150,7 @@ export function buildPeopleReports(req: PeopleBulkRequest): PeopleBulkResult {
 }
 
 const SUMMARY_HEADERS = [
-  'person', 'role', 'project', 'mode', 'period_from', 'period_to', 'sprints',
+  'person', 'role', 'team', 'project', 'mode', 'period_from', 'period_to', 'sprints',
   'tickets', 'completed', 'story_points', 'completed_story_points', 'dev_story_points', 'qa_story_points',
   'avg_turnaround_business_hours', 'median_turnaround_business_hours',
   'cycles', 'cycles_per_ticket', 'tickets_without_rework', 'no_rework_pct',
@@ -162,7 +163,7 @@ function summaryRow(r: PeopleReport, laneNames: string[]): Cell[] {
   const s = r.summary, t = r.team;
   const laneAvg = (sum: PeopleSummary, lane: string) => hours(sum.lanes.find(l => l.swimlane === lane)?.avgMs);
   return [
-    r.person, r.role, r.projectKey, r.mode, r.period?.from ?? '', r.period?.to ?? '', r.sprints.map(x => x.sprintName).join('; '),
+    r.person, r.role, r.teamName ?? '', r.projectKey, r.mode, r.period?.from ?? '', r.period?.to ?? '', r.sprints.map(x => x.sprintName).join('; '),
     s.tickets, s.completed, s.storyPoints, s.completedStoryPoints, s.devStoryPoints, s.qaStoryPoints,
     hours(s.avgTurnaroundMs), hours(s.medianTurnaroundMs),
     s.totalCycles, Math.round(s.avgCyclesPerTicket * 100) / 100, s.ticketsWithoutRework, pct(s.reworkFreeRate),
@@ -186,13 +187,13 @@ export function peopleSummaryCsv(reports: PeopleReport[]): string {
 export function peopleTicketsCsv(reports: PeopleReport[]): string {
   const laneNames = [...new Set(reports.flatMap(r => r.tickets.flatMap(t => Object.keys(t.laneTimesMs))))].sort();
   const headers = [
-    'person', 'role', 'ticket', 'summary', 'issue_type', 'credited_as', 'sprints', 'status_at_period_end', 'status_now',
+    'person', 'role', 'team', 'ticket', 'summary', 'issue_type', 'credited_as', 'sprints', 'status_at_period_end', 'status_now',
     'created', 'resolved', 'completed', 'story_points', 'dev_story_points', 'qa_story_points', 'priority',
     'turnaround_business_hours', 'role_cycles', 'dev_cycles', 'qa_cycles', 'linked_defects', 'no_activity_in_period', 'next_pi',
     ...laneNames.map(l => `${l.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_business_hours`),
   ];
   const rows = reports.flatMap(r => r.tickets.map(t => [
-    r.person, r.role, t.key, t.summary, t.issueType, t.creditedAs.join('+'), t.sprints.join('; '), t.status, t.statusNow,
+    r.person, r.role, r.teamName ?? '', t.key, t.summary, t.issueType, t.creditedAs.join('+'), t.sprints.join('; '), t.status, t.statusNow,
     dateOnly(t.created), dateOnly(t.resolved), t.completed, t.storyPoints, t.devStoryPoints, t.qaStoryPoints, t.priority,
     hours(t.turnaroundMs), r.role === 'dev' ? t.devCycles : t.qaCycles, t.devCycles, t.qaCycles, t.linkedDefects,
     t.noActivityInRange, t.nextPI,
@@ -218,6 +219,7 @@ export function buildPeopleBulkZip(req: PeopleBulkRequest): Buffer {
     generation: {
       generatedAt: new Date().toISOString(),
       projectKey: req.projectKey,
+      teamName: getTeamName(req.projectKey),
       role: req.role,
       period: req.period ?? null,
       previousPeriod: req.period ? req.previousPeriod ?? null : null,
@@ -258,14 +260,14 @@ export function buildSprintReportBulkZip(projectKey: string, sprintNames: string
     const filtered = applyFilters(full.ticketMetrics, filters);
     const m = filtered.length !== full.ticketMetrics.length ? aggregateSprintMetrics(filtered, cached) : full;
     return [
-      m.sprintName, dateOnly(m.sprintStartDate), dateOnly(m.sprintEndDate), m.totalTickets, m.completedTickets,
+      m.teamName ?? '', m.projectKey, m.sprintName, dateOnly(m.sprintStartDate), dateOnly(m.sprintEndDate), m.totalTickets, m.completedTickets,
       m.newTickets, m.carriedOverTickets, m.totalStoryPoints, m.totalDevPoints, m.totalQaPoints,
       hours(m.avgTurnaroundMs), Math.round(m.avgDevCycles * 100) / 100, Math.round(m.avgQaCycles * 100) / 100, m.totalDefects,
       Object.entries(m.avgSprintSwimlaneTimesMs).map(([lane, ms]) => `${lane}=${hours(ms)}`).join('; '),
     ];
   });
   const csv = toCsv([
-    'sprint', 'start', 'end', 'tickets', 'completed', 'new_tickets', 'carried_over_tickets',
+    'team', 'project', 'sprint', 'start', 'end', 'tickets', 'completed', 'new_tickets', 'carried_over_tickets',
     'story_points', 'dev_points', 'qa_points', 'avg_turnaround_business_hours', 'avg_dev_cycles', 'avg_qa_cycles', 'defects',
     'avg_hours_per_lane',
   ], rows);
@@ -276,6 +278,7 @@ export function buildSprintReportBulkZip(projectKey: string, sprintNames: string
     generation: {
       generatedAt: new Date().toISOString(),
       projectKey,
+      teamName: getTeamName(projectKey),
       filters: first?.generation.filters ?? null,
       sprints: exports.flatMap(e => e.export.generation.sprints),
       files: ['index.json', 'sprints.csv', ...exports.map(e => e.file)],

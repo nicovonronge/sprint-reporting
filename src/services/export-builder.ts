@@ -3,7 +3,7 @@ import { getDataGuide, type DataGuide } from '../constants/data-guide.js';
 import { calculateSprintMetrics, aggregateSprintMetrics } from './metrics-calculator.js';
 import { applyFilters } from './ticket-filter.js';
 import { buildComparisonReport, type ComparisonEntry } from './comparison-report.js';
-import { SWIMLANE_ORDER, EXCLUDED_SWIMLANE } from '../constants/workflow.js';
+import { SWIMLANE_ORDER, EXCLUDED_SWIMLANE, getTeamName } from '../constants/workflow.js';
 import type { FilterOptions, SprintMetrics, TicketMetrics } from '../types/metrics.js';
 
 /**
@@ -15,6 +15,7 @@ import type { FilterOptions, SprintMetrics, TicketMetrics } from '../types/metri
 export interface ExportGeneration {
   generatedAt: string;
   projectKey: string;
+  teamName: string | null;
   filters: FilterOptions | null;
   sprints: Array<{
     sprintName: string;
@@ -98,6 +99,7 @@ export function buildSprintReportExport(
     generation: {
       generatedAt: new Date().toISOString(),
       projectKey,
+      teamName: getTeamName(projectKey),
       filters: hasFilters ? filters : null,
       sprints,
       steps: [...COMMON_STEPS, ...filterSteps(hasFilters ? filters : null),
@@ -120,6 +122,7 @@ export function buildComparisonExport(
     generation: {
       generatedAt: new Date().toISOString(),
       projectKey,
+      teamName: getTeamName(projectKey),
       filters: null,
       sprints,
       steps: [
